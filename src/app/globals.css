@@ -184,11 +184,11 @@ body {
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   z-index: 50;
-  animation: fadeIn 0.2s ease forwards;
+  animation: fadeIn 0.18s ease forwards;
 }
 
 .modal-overlay.closing {
-  animation: fadeOut 0.15s ease forwards;
+  animation: fadeOut 0.13s ease forwards;
 }
 
 .modal-sheet {
@@ -201,12 +201,12 @@ body {
   background: var(--surface);
   border-radius: 1.5rem 1.5rem 0 0;
   z-index: 51;
-  animation: slideUp 0.3s ease forwards;
+  animation: slideUp 0.18s ease forwards;
   overflow-y: auto;
 }
 
 .modal-sheet.closing {
-  animation: slideDown 0.2s ease forwards;
+  animation: slideDown 0.13s ease forwards;
 }
 
 @media (min-width: 640px) {
@@ -220,7 +220,7 @@ body {
     width: 100%;
     border-radius: 1.5rem;
     max-height: 85vh;
-    animation: scaleIn 0.2s ease forwards;
+    animation: scaleIn 0.15s ease forwards;
   }
 
   .modal-sheet.closing {
@@ -289,6 +289,90 @@ body {
   to {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.95);
+  }
+}
+
+/* Cart Drawer Animations */
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease forwards;
+}
+
+.animate-fadeOut {
+  animation: fadeOut 0.15s ease forwards;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.3s ease forwards;
+}
+
+.animate-slideOutRight {
+  animation: slideOutRight 0.2s ease forwards;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Cart Item Animations */
+.animate-itemSlideIn {
+  will-change: transform, opacity;
+  animation: itemSlideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-itemSlideOut {
+  will-change: transform, opacity, max-height, margin, padding;
+  animation: itemSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes itemSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes itemSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+    max-height: 150px;
+    margin-bottom: 1rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-width: 1px;
+    overflow: hidden;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+    max-height: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-width: 0;
+    overflow: hidden;
   }
 }
 
@@ -402,6 +486,8 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   font-size: 1rem;
+  line-height: 1;
+  padding-bottom: 2px;
   transition: all 0.15s ease;
 }
 

@@ -6,7 +6,6 @@
 // ============================================
 
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
 import {
   CATEGORIES,
@@ -19,11 +18,13 @@ import {
 import {
   IconCart,
   IconStar,
-  IconClose,
   IconStore,
   IconFire,
+  IconPlus,
   getCategoryIcon,
 } from '@/lib/icons';
+import CartDrawer from '@/components/CartDrawer';
+import ProductModal from '@/components/ProductModal';
 
 // ============================================
 // MAIN PAGE COMPONENT
@@ -32,6 +33,8 @@ import {
 export default function MenuPage() {
   const [activeCategory, setActiveCategory] = useState('popular');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   // Refs for scroll management (refs don't cause re-renders)
@@ -42,8 +45,10 @@ export default function MenuPage() {
 
   const cartItemCount = useCartStore(state => state.getItemCount());
   const cartTotal = useCartStore(state => state.getTotal());
+  const addItem = useCartStore(state => state.addItem);
+  const cartItems = useCartStore(state => state.items);
 
-  // Client-side hydration
+  // Client-side hydration & scroll restoration
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -102,7 +107,15 @@ export default function MenuPage() {
     };
   }, [mounted]);
 
-  // Memoized category data
+  // Memoized category data with search filtering
+  const searchLower = searchQuery.toLowerCase();
+  const filteredProducts = searchQuery
+    ? PRODUCTS.filter(p =>
+      p.name.toLowerCase().includes(searchLower) ||
+      p.description.toLowerCase().includes(searchLower)
+    )
+    : null;
+
   const popularProducts = getPopularProducts();
   const categoryProducts = CATEGORIES.filter(c => c.id !== 'popular').map(cat => ({
     ...cat,
@@ -164,6 +177,8 @@ export default function MenuPage() {
             <input
               type="text"
               placeholder="Search menu..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-4 py-3 pl-10 bg-white rounded-xl border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
             />
             <svg
@@ -195,70 +210,122 @@ export default function MenuPage() {
 
       {/* Main Content - Continuous Scroll */}
       <main className="p-4 pb-16">
-        {/* Popular Section - Grid View */}
-        <section
-          ref={el => { sectionRefs.current['popular'] = el; }}
-          data-section="popular"
-          className="mb-8"
-        >
-          <div className="mb-4">
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              {getCategoryIcon('popular', 'w-5 h-5 text-[var(--primary)]')}
-              Popular
+        {/* Search Results */}
+        {filteredProducts ? (
+          <section className="mb-8">
+            <h2 className="text-lg font-bold mb-4">
+              {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for "{searchQuery}"
             </h2>
-            <p className="text-sm text-[var(--text-muted)]">Most ordered right now</p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {popularProducts.map(product => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onSelect={() => setSelectedProduct(product)}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* Category Sections - List View */}
-        {categoryProducts.map(category => (
-          <section
-            key={category.id}
-            ref={el => { sectionRefs.current[category.id] = el; }}
-            data-section={category.id}
-            className="mb-8"
-          >
-            <div className="mb-4">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                {getCategoryIcon(category.id, 'w-5 h-5 text-[var(--primary)]')}
-                {category.name}
-              </h2>
-            </div>
-
-            <div className="space-y-0">
-              {category.products.map(product => (
-                <ProductListItem
-                  key={product.id}
-                  product={product}
-                  onSelect={() => setSelectedProduct(product)}
-                />
-              ))}
-            </div>
+            {filteredProducts.length === 0 ? (
+              <p className="text-[var(--text-muted)] text-center py-8">No products found</p>
+            ) : (
+              <div className="space-y-0">
+                {filteredProducts.map(product => {
+                  const cartQty = cartItems.filter(i => i.product.id === product.id).reduce((sum, i) => sum + i.quantity, 0);
+                  return (
+                    <ProductListItem
+                      key={product.id}
+                      product={product}
+                      cartQuantity={cartQty}
+                      onSelect={() => setSelectedProduct(product)}
+                      onQuickAdd={() => {
+                        if (product.variations.length === 1) {
+                          addItem(product, product.variations[0]);
+                        } else {
+                          setSelectedProduct(product);
+                        }
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </section>
-        ))}
+        ) : (
+          <>
+            {/* Popular Section - Grid View */}
+            <section
+              ref={el => { sectionRefs.current['popular'] = el; }}
+              data-section="popular"
+              className="mb-8"
+            >
+              <div className="mb-4">
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  {getCategoryIcon('popular', 'w-5 h-5 text-[var(--primary)]')}
+                  Popular
+                </h2>
+                <p className="text-sm text-[var(--text-muted)]">Most ordered right now</p>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {popularProducts.map(product => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onSelect={() => setSelectedProduct(product)}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {/* Category Sections - List View */}
+            {categoryProducts.map(category => (
+              <section
+                key={category.id}
+                ref={el => { sectionRefs.current[category.id] = el; }}
+                data-section={category.id}
+                className="mb-8"
+              >
+                <div className="mb-4">
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    {getCategoryIcon(category.id, 'w-5 h-5 text-[var(--primary)]')}
+                    {category.name}
+                  </h2>
+                </div>
+
+                <div className="space-y-0">
+                  {category.products.map(product => {
+                    const cartQty = cartItems.filter(i => i.product.id === product.id).reduce((sum, i) => sum + i.quantity, 0);
+                    return (
+                      <ProductListItem
+                        key={product.id}
+                        product={product}
+                        cartQuantity={cartQty}
+                        onSelect={() => setSelectedProduct(product)}
+                        onQuickAdd={() => {
+                          if (product.variations.length === 1) {
+                            addItem(product, product.variations[0]);
+                          } else {
+                            setSelectedProduct(product);
+                          }
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </>
+        )}
       </main>
 
       {/* Floating Cart Button */}
       {mounted && cartItemCount > 0 && (
         <div className="floating-cart">
-          <Link href="/cart" className="floating-cart-button">
+          <button onClick={() => setIsCartOpen(true)} className="floating-cart-button">
             <IconCart className="w-5 h-5" />
             <span>{cartItemCount} items</span>
             <span className="text-white/60">•</span>
             <span>${cartTotal.toFixed(2)}</span>
-          </Link>
+          </button>
         </div>
       )}
+
+      {/* Cart Drawer */}
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+      />
 
       {/* Product Modal */}
       {selectedProduct && (
@@ -302,7 +369,7 @@ function ProductCard({
             onSelect();
           }}
         >
-          +
+          <IconPlus className="w-5 h-5" />
         </button>
 
         {product.isPopular && (
@@ -331,10 +398,14 @@ function ProductCard({
 
 function ProductListItem({
   product,
+  cartQuantity = 0,
   onSelect,
+  onQuickAdd,
 }: {
   product: Product;
+  cartQuantity?: number;
   onSelect: () => void;
+  onQuickAdd?: () => void;
 }) {
   return (
     <div
@@ -357,156 +428,37 @@ function ProductListItem({
         )}
       </div>
 
-      <div className="relative flex-shrink-0">
-        <div className="w-24 h-24 rounded-xl overflow-hidden relative">
-          <Image
-            src={product.imageUrl}
-            alt={product.name}
-            fill
-            className="object-cover"
-            sizes="96px"
-          />
+      <div className="flex-shrink-0">
+        <div className="w-24 h-24 rounded-xl overflow-visible relative">
+          <div className="w-full h-full rounded-xl overflow-hidden relative">
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              className="object-cover"
+              sizes="96px"
+            />
+          </div>
+          <button
+            className={`absolute -bottom-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm transition-colors leading-none ${cartQuantity > 0
+              ? 'bg-[var(--primary)] text-white'
+              : 'bg-white border border-[var(--border)]'
+              }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuickAdd?.();
+            }}
+          >
+            {cartQuantity > 0 ? (
+              <span className="text-sm -mt-0.5">{cartQuantity}</span>
+            ) : (
+              <IconPlus className="w-5 h-5 text-[var(--text-primary)]" />
+            )}
+          </button>
         </div>
-        <button
-          className="absolute -bottom-2 -right-2 w-8 h-8 bg-white border border-[var(--border)] rounded-full flex items-center justify-center text-xl leading-none shadow-sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect();
-          }}
-        >
-          <span className="mt-[-2px]">+</span>
-        </button>
       </div>
     </div>
   );
 }
 
-// ============================================
-// PRODUCT MODAL (Bottom Sheet)
-// ============================================
-
-function ProductModal({
-  product,
-  onClose,
-}: {
-  product: Product;
-  onClose: () => void;
-}) {
-  const [selectedVariation, setSelectedVariation] = useState<ProductVariation>(
-    product.variations[0]
-  );
-  const [quantity, setQuantity] = useState(1);
-  const [isClosing, setIsClosing] = useState(false);
-  const addItem = useCartStore(state => state.addItem);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(onClose, 200); // Match animation duration
-  };
-
-  const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) {
-      addItem(product, selectedVariation);
-    }
-    handleClose();
-  };
-
-  return (
-    <>
-      <div
-        className={`modal-overlay ${isClosing ? 'closing' : ''}`}
-        onClick={handleClose}
-      />
-
-      <div className={`modal-sheet ${isClosing ? 'closing' : ''}`}>
-        <button
-          onClick={handleClose}
-          className="absolute top-4 left-4 z-10 w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-md"
-        >
-          <IconClose className="w-5 h-5" />
-        </button>
-
-        <div className="h-48 sm:h-56 relative">
-          <Image
-            src={product.imageUrl}
-            alt={product.name}
-            fill
-            className="object-cover"
-            sizes="100vw"
-          />
-        </div>
-
-        <div className="p-5">
-          <h2 className="text-2xl font-bold mb-1">{product.name}</h2>
-          <p className="text-[var(--text-secondary)] text-sm mb-4">
-            from ${product.basePrice.toFixed(2)}
-          </p>
-          <p className="text-[var(--text-secondary)] text-sm mb-6">
-            {product.description}
-          </p>
-
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Variation</h3>
-              <span className="text-xs bg-[var(--text-primary)] text-white px-2 py-1 rounded-full">
-                Required
-              </span>
-            </div>
-
-            <div className="border border-[var(--border)] rounded-xl overflow-hidden">
-              {product.variations.map(variation => (
-                <label
-                  key={variation.name}
-                  className={`flex items-center justify-between px-5 py-4 cursor-pointer border-b border-[var(--border-light)] last:border-b-0 transition-colors ${selectedVariation.name === variation.name
-                    ? 'bg-[var(--primary-light)]'
-                    : 'hover:bg-[var(--background)]'
-                    }`}
-                >
-                  <span className="font-medium">{variation.name}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[var(--text-secondary)]">
-                      ${variation.price.toFixed(2)}
-                    </span>
-                    <div className={`w-5 h-5 rounded-full border-2 transition-all ${selectedVariation.name === variation.name
-                      ? 'border-[var(--primary)] border-[5px]'
-                      : 'border-[var(--border)]'
-                      }`} />
-                  </div>
-                  <input
-                    type="radio"
-                    name="variation"
-                    className="sr-only"
-                    checked={selectedVariation.name === variation.name}
-                    onChange={() => setSelectedVariation(variation)}
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 safe-bottom">
-            <div className="quantity-control">
-              <button
-                className="quantity-button"
-                onClick={() => setQuantity(q => Math.max(1, q - 1))}
-              >
-                −
-              </button>
-              <span className="w-8 text-center font-semibold">{quantity}</span>
-              <button
-                className="quantity-button"
-                onClick={() => setQuantity(q => q + 1)}
-              >
-                +
-              </button>
-            </div>
-
-            <button className="btn-primary flex-1" onClick={handleAddToCart}>
-              Add to cart · ${(selectedVariation.price * quantity).toFixed(2)}
-            </button>
-          </div>
-        </div>
-      </div >
-    </>
-  );
-}
+// ProductModal moved to src/components/ProductModal.tsx
