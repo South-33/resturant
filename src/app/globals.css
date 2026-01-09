@@ -1,26 +1,529 @@
 @import "tailwindcss";
 
+/* ============================================
+   RESTAURANT APP - GLOBAL STYLES
+   Mobile-first, premium design
+   ============================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand Colors */
+  --primary: #e91e63;
+  --primary-hover: #c2185b;
+  --secondary: #ff9800;
+  --accent: #4caf50;
+
+  /* Neutrals */
+  --background: #fafafa;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --border: #e0e0e0;
+  --border-light: #f0f0f0;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Spacing */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-foreground: var(--text-primary);
+  --color-primary: var(--primary);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area padding */
+.safe-top {
+  padding-top: var(--safe-area-top);
+}
+
+.safe-bottom {
+  padding-bottom: var(--safe-area-bottom);
+}
+
+/* ============================================
+   COMPONENT STYLES
+   ============================================ */
+
+/* Category Tabs */
+.category-tabs {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.category-tab {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  background: var(--background);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.category-tab svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.category-tab.active {
+  background: var(--text-primary);
+  color: var(--surface);
+  border-color: var(--text-primary);
+}
+
+.category-tab.active svg {
+  color: var(--surface);
+}
+
+/* Product Card */
+.product-card {
+  background: var(--surface);
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-card:active {
+  transform: scale(0.98);
+}
+
+@media (hover: hover) {
+  .product-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+}
+
+.product-card-image {
+  aspect-ratio: 1;
+  width: 100%;
+  object-fit: cover;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+}
+
+/* Add Button */
+.add-button {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.add-button:active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+  transform: scale(0.9);
+}
+
+/* Modal / Bottom Sheet */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  animation: fadeIn 0.2s ease forwards;
+}
+
+.modal-overlay.closing {
+  animation: fadeOut 0.15s ease forwards;
+}
+
+.modal-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 90vh;
+  max-height: 90dvh;
+  background: var(--surface);
+  border-radius: 1.5rem 1.5rem 0 0;
+  z-index: 51;
+  animation: slideUp 0.3s ease forwards;
+  overflow-y: auto;
+}
+
+.modal-sheet.closing {
+  animation: slideDown 0.2s ease forwards;
+}
+
+@media (min-width: 640px) {
+  .modal-sheet {
+    top: 50%;
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    max-width: 28rem;
+    width: 100%;
+    border-radius: 1.5rem;
+    max-height: 85vh;
+    animation: scaleIn 0.2s ease forwards;
+  }
+
+  .modal-sheet.closing {
+    animation: scaleOut 0.15s ease forwards;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes scaleOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+}
+
+/* Variation Options */
+.variation-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.variation-option:last-child {
+  border-bottom: none;
+}
+
+.variation-option:hover {
+  background: var(--background);
+}
+
+.variation-option.selected {
+  background: var(--primary-light);
+}
+
+.variation-radio {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  transition: all 0.15s ease;
+}
+
+.variation-option.selected .variation-radio {
+  border-color: var(--primary);
+  border-width: 5px;
+}
+
+/* Floating Cart Button */
+.floating-cart {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  padding-bottom: var(--safe-area-bottom);
+  z-index: 40;
+  animation: fadeSlideUp 0.3s ease forwards;
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.floating-cart-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.25rem;
+  background: var(--text-primary);
+  color: var(--surface);
+  border-radius: 9999px;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.2s ease;
+}
+
+.floating-cart-button:active {
+  transform: scale(0.95);
+}
+
+/* Page Content Animation */
+.page-content {
+  animation: pageFadeIn 0.25s ease forwards;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Quantity Controls */
+.quantity-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--background);
+  border-radius: 9999px;
+  padding: 0.25rem;
+}
+
+.quantity-button {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 1rem;
+  transition: all 0.15s ease;
+}
+
+.quantity-button:active {
+  background: var(--border);
+}
+
+/* Kitchen Order Card */
+.order-card {
+  background: var(--surface);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid var(--border);
+}
+
+.order-card.pending {
+  border-left-color: var(--secondary);
+}
+
+.order-card.preparing {
+  border-left-color: var(--primary);
+}
+
+.order-card.done {
+  border-left-color: var(--accent);
+}
+
+/* Primary Button */
+.btn-primary {
+  width: 100%;
+  padding: 1rem;
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  transition: background 0.2s ease;
+}
+
+.btn-primary:active {
+  background: var(--primary-hover);
+}
+
+.btn-primary:disabled {
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+/* Variation Radio */
+.variation-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+}
+
+.variation-option:last-child {
+  border-bottom: none;
+}
+
+.variation-radio {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  transition: all 0.15s ease;
+}
+
+.variation-option.selected .variation-radio {
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+
+/* Kitchen Kanban */
+.kanban-column {
+  flex: 1;
+  min-width: 280px;
+  max-width: 400px;
+}
+
+.kanban-header {
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.kanban-header.pending {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.kanban-header.preparing {
+  background: #fce4ec;
+  color: #c2185b;
+}
+
+.kanban-header.done {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+/* PIN Entry */
+.pin-input {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: 0.5rem;
+  padding: 1rem;
+  border: 2px solid var(--border);
+  border-radius: 0.75rem;
+  width: 100%;
+  max-width: 200px;
+}
+
+.pin-input:focus {
+  outline: none;
+  border-color: var(--primary);
 }
