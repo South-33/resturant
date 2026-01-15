@@ -156,20 +156,25 @@ export function IconMinus({ className = 'w-4 h-4', ...props }: IconProps) {
 }
 
 // Helper function to get category icon component
-export function getCategoryIcon(categoryId: string, className?: string) {
+export function getCategoryIcon(categoryName: string, className?: string) {
     const props = { className: className || 'w-4 h-4' };
-    switch (categoryId) {
-        case 'popular':
-            return <IconFire {...props} />;
-        case 'coffee':
-            return <IconCoffee {...props} />;
-        case 'tea':
-            return <IconTea {...props} />;
-        case 'smoothies':
-            return <IconCup {...props} />;
-        case 'food':
-            return <IconFood {...props} />;
-        default:
-            return <IconCoffee {...props} />;
+    const name = categoryName.toLowerCase();
+
+    if (name === 'popular' || name.includes('fire')) {
+        return <IconFire {...props} />;
     }
+    if (name.includes('coffee')) {
+        return <IconCoffee {...props} />;
+    }
+    if (name.includes('tea')) {
+        return <IconTea {...props} />;
+    }
+    if (name.includes('juice') || name.includes('smoothie')) {
+        return <IconCup {...props} />;
+    }
+    if (name.includes('food') || name.includes('snack') || name.includes('cake')) {
+        return <IconFood {...props} />;
+    }
+    // Default
+    return <IconCoffee {...props} />;
 }

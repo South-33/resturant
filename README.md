@@ -1,171 +1,235 @@
 # 🍜 Restaurant Ordering App
 
-A 3-screen restaurant ordering system with customer menu and kitchen order management.
+A real-time restaurant ordering system with customer menu, kitchen order management, and staff dashboard.
+
+## ✨ Features
+
+- **Customer Menu** — Browse products, customize orders, add to cart
+- **Real-time Kitchen** — Live Kanban board for order management
+- **Cashier POS** — Table overview with payment tracking
+- **Menu Management** — Staff can edit products *(coming soon)*
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Frontend | Next.js 16 (App Router) |
-| Styling | Tailwind CSS + Framer Motion-like CSS animations |
-| State | Zustand (cart & orders) |
-| Icons | Lucide React |
-| Backend | Supabase (PostgreSQL + Realtime) *Planned* |
+| Styling | Tailwind CSS + CSS animations |
+| State | Zustand (cart) |
+| Backend | **Convex** (Reactive Database + Real-time) |
+| Images | Unsplash URLs *(Cloudinary ready)* |
 | Deployment | Vercel |
 
 ---
 
-## Screens
+## 🚀 Quick Start
+
+```bash
+# 1. Install dependencies
+pnpm install
+
+# 2. Start Convex (creates project on first run)
+npx convex dev
+# → Copy NEXT_PUBLIC_CONVEX_URL to .env.local
+
+# 3. Seed the menu data (run once)
+npx convex run products:seedMenuData
+
+# 4. Start Next.js (in another terminal)
+pnpm dev
+
+# 5. Open the app
+# → Customer: http://localhost:3000
+# → Staff:    http://localhost:3000/staff (PIN: 1234)
+```
+
+---
+
+## 📱 Screens
 
 ### 1. Menu (`/`)
 Customer-facing menu with categories, product grid, and customization modal.
 
-**Features:**
 - Hero banner with restaurant branding
 - Horizontal category tabs (Popular 🔥, Coffee, Tea, Food, Juice & Smoothies)
 - Product grid (2 cols mobile, 4 cols desktop)
 - Product customization modal (variations like Hot/Iced/Frappe)
 - Floating cart button with item count
+- Slide-in cart drawer with checkout
 
-### 2. Cart (`/cart`)
-Order review and checkout.
+### 2. Staff Dashboard (`/staff`)
+Protected by PIN code (default: `1234`).
 
-**Features:**
-- Cart items with quantity controls (+/-)
-- "You might also like" suggestions
-- Subtotal & total calculation
-- Submit Order button → creates order in DB
+**Cashier View:**
+- 12-table grid with status indicators
+- Order details panel with payment controls
+- Mark orders as paid
 
-### 3. Kitchen (`/kitchen?pin=XXXX`)
-Staff order management dashboard.
+**Kitchen View:**
+- 3-column Kanban: Pending → Preparing → Done
+- Real-time order updates (auto-refresh via Convex)
+- One-click status progression
 
-> **Security:** Protected by PIN code query param. Incorrect/missing PIN shows PIN entry screen.
-
-**Features:**
-- 3-column Kanban: Pending | Preparing | Done
-- Real-time updates via Supabase subscriptions
-- Order cards with items, time elapsed, action buttons
-- Audio ping on new order (optional)
+**Menu Management:**
+- Product grid with search & filter
+- Add/Edit/Delete products with variations
+- Category sidebar with product counts
+- Toggle product popularity
 
 ---
 
-## Database Schema
+## 🗄️ Database Schema
 
-```sql
--- Categories
-create table categories (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  icon text,
-  sort_order int default 0
-);
+```typescript
+// convex/schema.ts
 
--- Products
-create table products (
-  id uuid primary key default gen_random_uuid(),
-  category_id uuid references categories(id),
-  name text not null,
-  description text,
-  image_url text,
-  base_price decimal(10,2) not null,
-  is_popular boolean default false,
-  variations jsonb -- [{name: "Hot", price: 1.60}, {name: "Iced", price: 2.15}]
-);
+categories: {
+  name: string,
+  icon?: string,
+  sortOrder: number
+}
+  .index("by_sort_order", ["sortOrder"])
 
--- Orders
-create table orders (
-  id uuid primary key default gen_random_uuid(),
-  order_number serial,
-  status text default 'pending', -- pending | preparing | done
-  total decimal(10,2),
-  created_at timestamptz default now()
-);
+products: {
+  categoryId: Id<"categories">,
+  name: string,
+  description: string,
+  imageUrl: string,
+  basePrice: number,
+  isPopular: boolean,
+  variations: [{ name: string, price: number }]
+}
+  .index("by_category", ["categoryId"])
+  .index("by_popular", ["isPopular"])
 
--- Order Items
-create table order_items (
-  id uuid primary key default gen_random_uuid(),
-  order_id uuid references orders(id) on delete cascade,
-  product_id uuid references products(id),
-  product_name text, -- denormalized for display
-  variation text,
-  quantity int default 1,
-  price decimal(10,2)
-);
+orders: {
+  orderNumber: number,
+  tableId: string,
+  status: "pending" | "preparing" | "done",
+  paymentStatus: "pending" | "paid",
+  total: number
+}
+  .index("by_status", ["status"])
+  .index("by_table", ["tableId"])
+  .index("by_payment", ["paymentStatus"])
 
--- Enable realtime
-alter publication supabase_realtime add table orders;
+orderItems: {
+  orderId: Id<"orders">,
+  productId?: Id<"products">,
+  productName: string,  // Denormalized for display speed
+  variation: string,
+  quantity: number,
+  price: number
+}
+  .index("by_order", ["orderId"])
 ```
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 src/
 ├── app/
-│   ├── page.tsx              # Menu screen
-│   ├── cart/page.tsx         # Cart screen
-│   ├── kitchen/page.tsx      # Kitchen dashboard
-│   ├── layout.tsx
+│   ├── page.tsx              # Customer menu
+│   ├── staff/page.tsx        # Staff dashboard (Cashier + Kitchen)
+│   ├── layout.tsx            # Root layout with Convex provider
 │   └── globals.css
 ├── components/
-│   ├── ProductCard.tsx
-│   ├── ProductModal.tsx
-│   ├── CartItem.tsx
-│   ├── OrderCard.tsx
-│   └── CategoryTabs.tsx
+│   ├── ConvexClientProvider.tsx
+│   ├── CartDrawer.tsx
+│   └── ProductModal.tsx
 ├── lib/
-│   ├── supabase.ts           # Supabase client
 │   ├── store.ts              # Zustand cart store
-│   └── mock-data.ts          # Mock products for frontend dev
-└── types/
-    └── index.ts
+│   └── icons.tsx             # SVG icons
+
+convex/
+├── schema.ts                 # Database schema
+├── orders.ts                 # Order queries & mutations
+└── products.ts               # Product queries & mutations
 ```
 
 ---
 
-## Development Phases
+## 🖼️ Image Storage (Future)
 
-### Phase 1: Frontend ✅ Complete
-- [x] Project setup (Next.js 16 + Tailwind)
-- [x] Mock data and Zustand stores
-- [x] Menu screen with product grid, categories, & variation modal
-- [x] Cart screen with quantity controls
-- [x] Kitchen dashboard with Kanban layout
-- [x] **UI Polish**: SVG icons, Unsplash images, smooth animations
-- [x] localStorage persistence
+Currently using **Unsplash URLs** for demo purposes.
 
-### Phase 2: Supabase Integration (Coming Soon)
-- [ ] Create Supabase project
-- [ ] Run database migrations
-- [ ] Replace mock data with Supabase queries
-- [ ] Add real-time subscriptions for kitchen
-- [ ] Submit order → insert into database
-
-### Phase 3: Deployment
-- [ ] Deploy to Vercel
-
----
-
-## Environment Variables
+For production, integrate **Cloudinary** for:
+- Auto-optimization (WebP, compression)
+- CDN delivery
+- 25GB free bandwidth/month
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your-project-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-KITCHEN_PIN=1234
+# Add to .env.local when ready
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+Store only the Cloudinary URL in Convex to minimize bandwidth usage.
+
+---
+
+## 📊 Convex Free Tier Limits
+
+| Resource | Limit | Your Estimate | Status |
+|----------|-------|---------------|--------|
+| Function calls | 1M/month | ~50-100k | ✅ |
+| Database storage | 512 MB | <50 MB | ✅ |
+| Database bandwidth | 1 GB/month | ~200 MB | ✅ |
+| Real-time connections | 100 concurrent | 1-3 | ✅ |
+
+**Verdict:** Free tier easily supports a single restaurant location.
+
+---
+
+## ✅ Development Progress
+
+### Phase 1: Frontend ✅
+- [x] Next.js 16 + Tailwind setup
+- [x] Menu screen with product grid & categories
+- [x] Cart drawer with quantity controls
+- [x] Staff dashboard (Cashier + Kitchen)
+- [x] Smooth animations & UI polish
+
+### Phase 2: Convex Backend ✅
+- [x] Database schema with optimized indexes
+- [x] Order mutations (create, update status, update payment)
+- [x] Product queries + seed mutation
+- [x] Real-time subscriptions in Kitchen view
+- [x] Cart → Convex order submission
+
+### Phase 3: Menu Management ✅
+- [x] Menu tab in Staff dashboard
+- [x] Product list with search/filter
+- [x] Add/Edit/Delete products
+- [x] Product form with variations
+- [x] Category sidebar & creation
+- [x] Toggle product popularity
+
+### Phase 4: Production 📋
+- [ ] Deploy Convex to production
+- [ ] Deploy frontend to Vercel
+- [ ] Cloudinary image uploads
+- [ ] Audio notifications for new orders
+
+---
+
+## 🔧 Environment Variables
+
+```env
+# Required
+NEXT_PUBLIC_CONVEX_URL=https://your-project.convex.cloud
+
+# Optional (for image uploads)
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
 ```
 
 ---
 
-## Commands
+## 📝 License
 
-```bash
-# Install dependencies
-pnpm install
-
-# Run dev server
-pnpm dev
-
-# Build for production
-pnpm build
-```
+MIT

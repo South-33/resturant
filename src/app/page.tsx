@@ -2,15 +2,15 @@
 
 // ============================================
 // MENU PAGE - Customer ordering screen
-// Mobile-first responsive design
+// Now fetches data from Convex
 // ============================================
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import {
-  CATEGORIES,
-  PRODUCTS,
-  getPopularProducts,
   useCartStore,
   type Product,
   type ProductVariation,
@@ -27,6 +27,44 @@ import CartDrawer from '@/components/CartDrawer';
 import ProductModal from '@/components/ProductModal';
 
 // ============================================
+// TYPE ADAPTERS (Convex → Local)
+// ============================================
+
+interface ConvexCategory {
+  _id: Id<"categories">;
+  _creationTime: number;
+  name: string;
+  icon?: string;
+  sortOrder: number;
+}
+
+interface ConvexProduct {
+  _id: Id<"products">;
+  _creationTime: number;
+  categoryId: Id<"categories">;
+  name: string;
+  description: string;
+  imageUrl: string;
+  basePrice: number;
+  isPopular: boolean;
+  variations: { name: string; price: number }[];
+}
+
+// Convert Convex product to local Product type (for cart compatibility)
+function toLocalProduct(p: ConvexProduct): Product {
+  return {
+    id: p._id,
+    categoryId: p.categoryId,
+    name: p.name,
+    description: p.description,
+    imageUrl: p.imageUrl,
+    basePrice: p.basePrice,
+    isPopular: p.isPopular,
+    variations: p.variations,
+  };
+}
+
+// ============================================
 // MAIN PAGE COMPONENT
 // ============================================
 
@@ -37,18 +75,49 @@ export default function MenuPage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Refs for scroll management (refs don't cause re-renders)
+  // Fetch data from Convex
+  const convexCategories = useQuery(api.products.getCategories) as ConvexCategory[] | undefined;
+  const convexProducts = useQuery(api.products.getAllProducts) as ConvexProduct[] | undefined;
+
+  // Convert to local types
+  const categories = useMemo(() => {
+    if (!convexCategories || !convexProducts) return [];
+    const products = convexProducts.map(toLocalProduct);
+    const hasPopular = products.some(p => p.isPopular);
+
+    const baseCategories = convexCategories.map(c => ({
+      id: c._id,
+      name: c.name,
+      sortOrder: c.sortOrder
+    }));
+
+    if (hasPopular) {
+      return [
+        { id: 'popular', name: 'Popular', sortOrder: -1 },
+        ...baseCategories
+      ];
+    }
+    return baseCategories;
+  }, [convexCategories, convexProducts]);
+
+  const products = useMemo(() => {
+    if (!convexProducts) return [];
+    return convexProducts.map(toLocalProduct);
+  }, [convexProducts]);
+
+  // Refs for scroll management
   const sectionRefs = useRef<{ [key: string]: HTMLElement | null }>({});
   const tabRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const isScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const cartItemCount = useCartStore(state => state.getItemCount());
   const cartTotal = useCartStore(state => state.getTotal());
   const addItem = useCartStore(state => state.addItem);
   const cartItems = useCartStore(state => state.items);
 
-  // Client-side hydration & scroll restoration
+  // Client-side hydration
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -61,19 +130,14 @@ export default function MenuPage() {
     }
   }, [activeCategory]);
 
-  // Debounce ref for scroll detection
-  const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
-
   // Intersection Observer - updates active tab on manual scroll
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || categories.length === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        // Skip if programmatic scrolling is in progress
         if (isScrollingRef.current) return;
 
-        // Find the section with highest intersection ratio
         const visible = entries
           .filter(e => e.isIntersecting && e.intersectionRatio > 0.1)
           .map(e => ({ id: e.target.getAttribute('data-section'), ratio: e.intersectionRatio }))
@@ -82,7 +146,6 @@ export default function MenuPage() {
         if (visible.length > 0) {
           const best = visible.reduce((a, b) => (b.ratio > a.ratio ? b : a));
 
-          // Debounce to prevent flicker
           if (scrollDebounceRef.current) {
             clearTimeout(scrollDebounceRef.current);
           }
@@ -105,48 +168,59 @@ export default function MenuPage() {
       observer.disconnect();
       if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
     };
-  }, [mounted]);
+  }, [mounted, categories]);
 
-  // Memoized category data with search filtering
+  // Derived data
   const searchLower = searchQuery.toLowerCase();
   const filteredProducts = searchQuery
-    ? PRODUCTS.filter(p =>
+    ? products.filter(p =>
       p.name.toLowerCase().includes(searchLower) ||
       p.description.toLowerCase().includes(searchLower)
     )
     : null;
 
-  const popularProducts = getPopularProducts();
-  const categoryProducts = CATEGORIES.filter(c => c.id !== 'popular').map(cat => ({
-    ...cat,
-    products: PRODUCTS.filter(p => p.categoryId === cat.id),
-  }));
+  const popularProducts = products.filter(p => p.isPopular);
+  const categoryProducts = categories
+    .filter(c => c.id !== 'popular')
+    .map(cat => ({
+      ...cat,
+      products: products.filter(p => p.categoryId === cat.id),
+    }));
 
-  // Scroll to section handler with debouncing
+  // Scroll to section handler
   const scrollToSection = (categoryId: string) => {
-    // Debounce: clear any pending timeout
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
 
-    // Lock observer immediately
     isScrollingRef.current = true;
     setActiveCategory(categoryId);
 
     const element = sectionRefs.current[categoryId];
     if (element) {
-      const offset = 80; // Pixels below sticky header
+      const offset = 80;
       const top = element.getBoundingClientRect().top + window.scrollY - offset;
       window.scrollTo({ top, behavior: 'smooth' });
 
-      // Unlock observer after scroll animation completes
       scrollTimeoutRef.current = setTimeout(() => {
         isScrollingRef.current = false;
-      }, 700); // Slightly longer than typical smooth scroll
+      }, 700);
     } else {
       isScrollingRef.current = false;
     }
   };
+
+  // Loading state
+  if (!convexCategories || !convexProducts) {
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-[var(--text-secondary)]">Loading menu...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--background)] page-content">
@@ -162,7 +236,7 @@ export default function MenuPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-[var(--text-primary)]">
-                Delicious Café
+                The Moon
               </h1>
               <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                 <IconStar className="w-4 h-4 text-yellow-500" />
@@ -195,20 +269,20 @@ export default function MenuPage() {
 
       {/* Category Tabs */}
       <nav className="category-tabs scrollbar-hide sticky top-0 z-30">
-        {CATEGORIES.map(category => (
+        {categories.map(category => (
           <button
             key={category.id}
             ref={el => { tabRefs.current[category.id] = el; }}
             onClick={() => scrollToSection(category.id)}
             className={`category-tab ${activeCategory === category.id ? 'active' : ''}`}
           >
-            {getCategoryIcon(category.id, 'w-4 h-4')}
+            {getCategoryIcon(category.id === 'popular' ? 'popular' : category.name.toLowerCase(), 'w-4 h-4')}
             {category.name}
           </button>
         ))}
       </nav>
 
-      {/* Main Content - Continuous Scroll */}
+      {/* Main Content */}
       <main className="p-4 pb-16">
         {/* Search Results */}
         {filteredProducts ? (
@@ -244,29 +318,31 @@ export default function MenuPage() {
         ) : (
           <>
             {/* Popular Section - Grid View */}
-            <section
-              ref={el => { sectionRefs.current['popular'] = el; }}
-              data-section="popular"
-              className="mb-8"
-            >
-              <div className="mb-4">
-                <h2 className="text-lg font-bold flex items-center gap-2">
-                  {getCategoryIcon('popular', 'w-5 h-5 text-[var(--primary)]')}
-                  Popular
-                </h2>
-                <p className="text-sm text-[var(--text-muted)]">Most ordered right now</p>
-              </div>
+            {popularProducts.length > 0 && (
+              <section
+                ref={el => { sectionRefs.current['popular'] = el; }}
+                data-section="popular"
+                className="mb-8"
+              >
+                <div className="mb-4">
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <IconFire className="w-5 h-5 text-[var(--primary)]" />
+                    Popular
+                  </h2>
+                  <p className="text-sm text-[var(--text-muted)]">Most ordered right now</p>
+                </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {popularProducts.map(product => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onSelect={() => setSelectedProduct(product)}
-                  />
-                ))}
-              </div>
-            </section>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {popularProducts.map(product => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onSelect={() => setSelectedProduct(product)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* Category Sections - List View */}
             {categoryProducts.map(category => (
@@ -278,7 +354,7 @@ export default function MenuPage() {
               >
                 <div className="mb-4">
                   <h2 className="text-lg font-bold flex items-center gap-2">
-                    {getCategoryIcon(category.id, 'w-5 h-5 text-[var(--primary)]')}
+                    {getCategoryIcon(category.name.toLowerCase(), 'w-5 h-5 text-[var(--primary)]')}
                     {category.name}
                   </h2>
                 </div>
@@ -373,9 +449,8 @@ function ProductCard({
         </button>
 
         {product.isPopular && (
-          <div className="absolute top-2 left-2 bg-[var(--primary)] text-white text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
-            <span className="w-1.5 h-1.5 bg-white rounded-full" />
-            Popular
+          <div className="absolute top-2 left-2 z-10">
+            <PopularBadge />
           </div>
         )}
       </div>
@@ -409,7 +484,7 @@ function ProductListItem({
 }) {
   return (
     <div
-      className="flex gap-4 py-4 border-b border-[var(--border-light)] cursor-pointer"
+      className="flex gap-4 py-4 border-b border-[var(--border-light)] cursor-pointer hover:bg-black/[0.01] transition-colors"
       onClick={onSelect}
     >
       <div className="flex-1 min-w-0">
@@ -421,10 +496,7 @@ function ProductListItem({
           {product.description}
         </p>
         {product.isPopular && (
-          <div className="inline-flex items-center gap-1 text-xs text-[var(--primary)]">
-            <IconFire className="w-3 h-3" />
-            Popular
-          </div>
+          <PopularBadge compact />
         )}
       </div>
 
@@ -461,4 +533,24 @@ function ProductListItem({
   );
 }
 
-// ProductModal moved to src/components/ProductModal.tsx
+// ============================================
+// POPULAR BADGE Component
+// ============================================
+
+function PopularBadge({ compact = false }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-pink-50 border border-pink-100 text-[10px] font-bold text-[var(--primary)] uppercase tracking-tight">
+        <IconFire className="w-2.5 h-2.5" />
+        Popular
+      </div>
+    );
+  }
+
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md border border-pink-100 text-[11px] font-bold text-[var(--primary)] shadow-sm transition-transform hover:scale-105 active:scale-95">
+      <IconFire className="w-3 h-3 text-[var(--primary)]" />
+      Popular
+    </div>
+  );
+}

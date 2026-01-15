@@ -2,16 +2,16 @@
 
 // ============================================
 // CART DRAWER - Slide-in overlay cart
-// Preserves menu scroll position, SPA-style
+// Now submits orders to Convex
 // ============================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import {
     useCartStore,
-    useOrdersStore,
-    createMockOrder,
-    PRODUCTS,
     type CartItem,
     type Product,
 } from '@/lib/store';
@@ -25,6 +25,33 @@ import {
 } from '@/lib/icons';
 import ProductModal from '@/components/ProductModal';
 
+// Type from Convex
+interface ConvexProduct {
+    _id: Id<"products">;
+    _creationTime: number;
+    categoryId: Id<"categories">;
+    name: string;
+    description: string;
+    imageUrl: string;
+    basePrice: number;
+    isPopular: boolean;
+    variations: { name: string; price: number }[];
+}
+
+// Convert to local type
+function toLocalProduct(p: ConvexProduct): Product {
+    return {
+        id: p._id,
+        categoryId: p.categoryId,
+        name: p.name,
+        description: p.description,
+        imageUrl: p.imageUrl,
+        basePrice: p.basePrice,
+        isPopular: p.isPopular,
+        variations: p.variations,
+    };
+}
+
 interface CartDrawerProps {
     isOpen: boolean;
     onClose: () => void;
@@ -35,15 +62,26 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     const [orderPlaced, setOrderPlaced] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'khqr'>('cash');
+    const [tableId, setTableId] = useState('T1');
     const [inlineProduct, setInlineProduct] = useState<Product | null>(null);
     const [canAnimateItems, setCanAnimateItems] = useState(false);
+    const [orderNumber, setOrderNumber] = useState<number | null>(null);
 
     const items = useCartStore(state => state.items);
     const updateQuantity = useCartStore(state => state.updateQuantity);
     const removeItem = useCartStore(state => state.removeItem);
     const clearCart = useCartStore(state => state.clearCart);
     const getTotal = useCartStore(state => state.getTotal);
-    const addOrder = useOrdersStore(state => state.addOrder);
+
+    // Convex
+    const createOrder = useMutation(api.orders.createOrder);
+    const convexPopularProducts = useQuery(api.products.getPopularProducts) as ConvexProduct[] | undefined;
+
+    // Convert to local type for cart compatibility
+    const popularProducts = useMemo(() => {
+        if (!convexPopularProducts) return [];
+        return convexPopularProducts.map(toLocalProduct);
+    }, [convexPopularProducts]);
 
     const subtotal = getTotal();
     const tax = subtotal * 0.1;
@@ -57,7 +95,10 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             onClose();
             // Reset order placed state when drawer closes
             if (orderPlaced) {
-                setTimeout(() => setOrderPlaced(false), 300);
+                setTimeout(() => {
+                    setOrderPlaced(false);
+                    setOrderNumber(null);
+                }, 300);
             }
         }, 200);
     };
@@ -87,14 +128,29 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         if (items.length === 0) return;
 
         setIsSubmitting(true);
-        await new Promise(resolve => setTimeout(resolve, 800));
 
-        const order = createMockOrder(items);
-        addOrder(order);
-        clearCart();
+        try {
+            // Submit to Convex
+            const result = await createOrder({
+                tableId,
+                items: items.map(item => ({
+                    productName: item.product.name,
+                    variation: item.variation.name,
+                    quantity: item.quantity,
+                    price: item.variation.price * item.quantity,
+                })),
+                total: total,
+            });
 
-        setIsSubmitting(false);
-        setOrderPlaced(true);
+            setOrderNumber(result.orderNumber);
+            clearCart();
+            setOrderPlaced(true);
+        } catch (error) {
+            console.error('Failed to create order:', error);
+            alert('Failed to create order. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -115,6 +171,11 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             <IconCheck className="w-10 h-10 text-green-600" />
                         </div>
                         <h1 className="text-2xl font-bold mb-2">Order Placed!</h1>
+                        {orderNumber && (
+                            <p className="text-4xl font-bold text-[var(--primary)] mb-4">
+                                #{orderNumber}
+                            </p>
+                        )}
                         <p className="text-[var(--text-secondary)] mb-8">
                             Your order has been sent to the kitchen
                         </p>
@@ -172,7 +233,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                             <h3 className="font-bold text-sm">Popular with your order</h3>
                                         </div>
                                         <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-4 -mx-5 px-5">
-                                            {PRODUCTS.filter(p => p.isPopular).slice(0, 4).map(product => (
+                                            {popularProducts.slice(0, 4).map(product => (
                                                 <button
                                                     key={product.id}
                                                     onClick={() => setInlineProduct(product)}
@@ -199,8 +260,27 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                     </div>
                                 </div>
 
-                                {/* Footer - Payment & Totals */}
+                                {/* Footer - Table Selection & Payment */}
                                 <div className="bg-white border-t border-[var(--border-light)] p-5 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+
+                                    {/* Table Selection */}
+                                    <div className="mb-4">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                                            Select Table
+                                        </label>
+                                        <select
+                                            className="w-full bg-gray-50 border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent appearance-none"
+                                            value={tableId}
+                                            onChange={(e) => setTableId(e.target.value)}
+                                        >
+                                            {Array.from({ length: 12 }).map((_, i) => (
+                                                <option key={i} value={`T${i + 1}`}>
+                                                    Table {i + 1}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
                                     {/* Subtotal Details */}
                                     <div className="space-y-3 mb-6">
                                         <div className="flex justify-between text-sm">
