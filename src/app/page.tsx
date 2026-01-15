@@ -85,11 +85,14 @@ export default function MenuPage() {
     const products = convexProducts.map(toLocalProduct);
     const hasPopular = products.some(p => p.isPopular);
 
-    const baseCategories = convexCategories.map(c => ({
-      id: c._id,
-      name: c.name,
-      sortOrder: c.sortOrder
-    }));
+    // Filter out any Convex category named "Popular" - we use a synthetic one instead
+    const baseCategories = convexCategories
+      .filter(c => c.name.toLowerCase() !== 'popular')
+      .map(c => ({
+        id: c._id,
+        name: c.name,
+        sortOrder: c.sortOrder
+      }));
 
     if (hasPopular) {
       return [
@@ -181,7 +184,7 @@ export default function MenuPage() {
 
   const popularProducts = products.filter(p => p.isPopular);
   const categoryProducts = categories
-    .filter(c => c.id !== 'popular')
+    .filter(c => c.id !== 'popular' && c.name.toLowerCase() !== 'popular')
     .map(cat => ({
       ...cat,
       products: products.filter(p => p.categoryId === cat.id),

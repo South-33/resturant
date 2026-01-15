@@ -18,6 +18,7 @@ import {
     IconPlus,
     IconTrash,
     IconClose,
+    IconEdit,
 } from '@/lib/icons';
 
 // ============================================
@@ -483,12 +484,15 @@ function MenuManagementView() {
     const deleteProduct = useMutation(api.products.deleteProduct);
     const togglePopular = useMutation(api.products.toggleProductPopular);
     const createCategory = useMutation(api.products.createCategory);
+    const updateCategory = useMutation(api.products.updateCategory);
+    const deleteCategoryMutation = useMutation(api.products.deleteCategory);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [isAddingProduct, setIsAddingProduct] = useState(false);
     const [isAddingCategory, setIsAddingCategory] = useState(false);
+    const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
     // Filter products
     const filteredProducts = useMemo(() => {
@@ -514,6 +518,19 @@ function MenuManagementView() {
         await togglePopular({ productId });
     };
 
+    const handleDeleteCategory = async (categoryId: Id<"categories">) => {
+        const count = products.filter(p => p.categoryId === categoryId).length;
+        const message = count > 0
+            ? `Delete this category and its ${count} product${count > 1 ? 's' : ''}?`
+            : 'Delete this category?';
+        if (confirm(message)) {
+            await deleteCategoryMutation({ categoryId, deleteProducts: true });
+            if (selectedCategory === categoryId) {
+                setSelectedCategory('all');
+            }
+        }
+    };
+
     return (
         <div className="flex h-full">
             {/* Sidebar */}
@@ -528,14 +545,38 @@ function MenuManagementView() {
                 {categories.map(cat => {
                     const count = products.filter(p => p.categoryId === cat._id).length;
                     return (
-                        <button
+                        <div
                             key={cat._id}
+                            className={`group relative px-3 py-2 rounded-lg text-sm font-medium transition-all flex justify-between items-center cursor-pointer ${selectedCategory === cat._id ? 'bg-orange-100 text-orange-700' : 'hover:bg-stone-100'}`}
                             onClick={() => setSelectedCategory(cat._id)}
-                            className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex justify-between ${selectedCategory === cat._id ? 'bg-orange-100 text-orange-700' : 'hover:bg-stone-100'}`}
                         >
                             <span>{cat.icon} {cat.name}</span>
-                            <span className="text-stone-400">{count}</span>
-                        </button>
+                            <div className="flex items-center gap-1">
+                                <span className="text-stone-400 group-hover:hidden">{count}</span>
+                                <div className="hidden group-hover:flex items-center gap-1">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingCategory(cat);
+                                        }}
+                                        className="p-1 hover:bg-stone-200 rounded"
+                                        title="Edit category"
+                                    >
+                                        <IconEdit className="w-3.5 h-3.5 text-stone-500" />
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteCategory(cat._id);
+                                        }}
+                                        className="p-1 hover:bg-red-100 rounded"
+                                        title="Delete category"
+                                    >
+                                        <IconTrash className="w-3.5 h-3.5 text-red-500" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     );
                 })}
                 <button
@@ -665,12 +706,21 @@ function MenuManagementView() {
             )}
 
             {/* Category Modal */}
-            {isAddingCategory && (
+            {(isAddingCategory || editingCategory) && (
                 <CategoryFormModal
-                    onClose={() => setIsAddingCategory(false)}
-                    onSave={async (data) => {
-                        await createCategory(data);
+                    category={editingCategory}
+                    onClose={() => {
                         setIsAddingCategory(false);
+                        setEditingCategory(null);
+                    }}
+                    onSave={async (data) => {
+                        if (editingCategory) {
+                            await updateCategory({ categoryId: editingCategory._id, ...data });
+                        } else {
+                            await createCategory(data);
+                        }
+                        setIsAddingCategory(false);
+                        setEditingCategory(null);
                     }}
                 />
             )}
@@ -908,15 +958,19 @@ function ProductFormModal({
 // ============================================
 
 function CategoryFormModal({
+    category,
     onClose,
     onSave,
 }: {
+    category: Category | null;
     onClose: () => void;
     onSave: (data: { name: string; icon?: string }) => Promise<void>;
 }) {
-    const [name, setName] = useState('');
-    const [icon, setIcon] = useState('');
+    const [name, setName] = useState(category?.name || '');
+    const [icon, setIcon] = useState(category?.icon || '');
     const [isSaving, setIsSaving] = useState(false);
+
+    const isEditing = !!category;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -934,7 +988,7 @@ function CategoryFormModal({
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
                 <div className="p-4 border-b border-stone-100 flex items-center justify-between">
-                    <h2 className="text-lg font-bold">Add Category</h2>
+                    <h2 className="text-lg font-bold">{isEditing ? 'Edit Category' : 'Add Category'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-full">
                         <IconClose className="w-5 h-5" />
                     </button>
@@ -978,7 +1032,7 @@ function CategoryFormModal({
                             disabled={isSaving || !name}
                             className="flex-1 py-2.5 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 disabled:opacity-50"
                         >
-                            {isSaving ? 'Adding...' : 'Add'}
+                            {isSaving ? (isEditing ? 'Saving...' : 'Adding...') : (isEditing ? 'Save' : 'Add')}
                         </button>
                     </div>
                 </form>
