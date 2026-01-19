@@ -114,6 +114,7 @@ export default defineSchema({
         ratingCount: v.optional(v.string()), // "200+ ratings"
         currency: v.optional(v.string()), // "$", "៛", etc.
         taxRate: v.optional(v.number()), // 0.1 = 10%
+        staffPin: v.optional(v.string()), // PIN for staff access
     }),
 
     // ----------------------------------------
@@ -123,6 +124,14 @@ export default defineSchema({
         key: v.literal("layout"), // singleton pattern
         gridWidth: v.number(), // e.g., 12
         gridHeight: v.number(), // e.g., 8
+        entrances: v.optional(v.array(v.object({
+            id: v.string(), // "E1", "E2", etc.
+            x: v.number(),
+            y: v.number(),
+            width: v.number(),
+            side: v.union(v.literal("top"), v.literal("bottom"), v.literal("left"), v.literal("right")),
+        }))),
+        // Deprecated single door field
         doorPosition: v.optional(v.object({
             x: v.number(),
             y: v.number(),

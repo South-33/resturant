@@ -38,6 +38,7 @@ export const updateSettings = mutation({
         ratingCount: v.optional(v.string()),
         currency: v.optional(v.string()),
         taxRate: v.optional(v.number()),
+        staffPin: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const existing = await ctx.db
@@ -58,6 +59,22 @@ export const updateSettings = mutation({
     },
 });
 
+/**
+ * Validate staff PIN
+ */
+export const validatePin = mutation({
+    args: { pin: v.string() },
+    handler: async (ctx, args) => {
+        const settings = await ctx.db
+            .query("settings")
+            .filter((q) => q.eq(q.field("key"), "restaurant"))
+            .first();
+        
+        const correctPin = settings?.staffPin ?? "1234"; // Default to 1234 if not set
+        return { isValid: args.pin === correctPin };
+    },
+});
+
 // ============================================
 // FLOOR PLAN
 // ============================================
@@ -66,7 +83,7 @@ const DEFAULT_FLOOR_PLAN = {
     key: "layout" as const,
     gridWidth: 12,
     gridHeight: 8,
-    doorPosition: { x: 5, y: 0, width: 2, side: "top" as const },
+    entrances: [{ id: "E1", x: 5, y: 0, width: 2, side: "top" as const }],
 };
 
 export const getFloorPlan = query({
@@ -76,7 +93,18 @@ export const getFloorPlan = query({
             .query("floorPlan")
             .filter((q) => q.eq(q.field("key"), "layout"))
             .first();
-        return plan ?? DEFAULT_FLOOR_PLAN;
+        
+        if (!plan) return DEFAULT_FLOOR_PLAN;
+
+        // Migrating old doorPosition to entrances array if it exists
+        if (plan.doorPosition && (!plan.entrances || plan.entrances.length === 0)) {
+            return {
+                ...plan,
+                entrances: [{ id: "E1", ...plan.doorPosition }]
+            };
+        }
+
+        return plan;
     },
 });
 
@@ -84,12 +112,13 @@ export const updateFloorPlan = mutation({
     args: {
         gridWidth: v.optional(v.number()),
         gridHeight: v.optional(v.number()),
-        doorPosition: v.optional(v.object({
+        entrances: v.optional(v.array(v.object({
+            id: v.string(),
             x: v.number(),
             y: v.number(),
             width: v.number(),
             side: v.union(v.literal("top"), v.literal("bottom"), v.literal("left"), v.literal("right")),
-        })),
+        }))),
     },
     handler: async (ctx, args) => {
         const existing = await ctx.db

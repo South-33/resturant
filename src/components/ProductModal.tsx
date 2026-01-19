@@ -156,114 +156,112 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
             />
 
             {/* Modal Sheet */}
-            <div className={`modal-sheet ${isClosing ? 'closing' : ''}`}>
+            <div className={`modal-sheet flex flex-col ${isClosing ? 'closing' : ''}`}>
                 <button
                     onClick={handleClose}
-                    className="absolute top-4 left-4 z-10 w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-md"
+                    className="absolute top-4 left-4 z-20 w-11 h-11 flex items-center justify-center bg-white rounded-full shadow-md active:scale-90 transition-transform touch-manipulation"
                 >
                     <IconClose className="w-5 h-5" />
                 </button>
 
-                <div className="h-48 sm:h-56 relative bg-stone-100">
-                    {product.imageUrl && isValidUrl(product.imageUrl) ? (
-                        <Image
-                            src={product.imageUrl}
-                            alt={product.name}
-                            fill
-                            className="object-cover"
-                            sizes="100vw"
-                        />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center text-7xl">
-                            📦
-                        </div>
-                    )}
-                </div>
-
-                <div className="p-5">
-                    <h2 className="text-2xl font-bold mb-1">{product.name}</h2>
-                    <p className="text-[var(--text-secondary)] text-sm mb-4">
-                        from ${product.basePrice.toFixed(2)}
-                    </p>
-                    <p className="text-[var(--text-secondary)] text-sm mb-6">
-                        {product.description}
-                    </p>
-
-                    {/* Variation Groups */}
-                    {product.variationGroups && product.variationGroups.length > 0 && product.variationGroups.map(group => (
-                        <div key={group.name} className="mb-6">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="font-semibold">{group.name}</h3>
-                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                    group.required 
-                                        ? 'bg-[var(--text-primary)] text-white' 
-                                        : 'bg-gray-100 text-gray-500'
-                                }`}>
-                                    {group.required ? 'Required' : 'Optional'}
-                                </span>
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto min-h-0">
+                    <div className="h-48 sm:h-56 relative bg-stone-100">
+                        {product.imageUrl && isValidUrl(product.imageUrl) ? (
+                            <Image
+                                src={product.imageUrl}
+                                alt={product.name}
+                                fill
+                                className="object-cover"
+                                sizes="100vw"
+                            />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-7xl">
+                                📦
                             </div>
-
-                            <div className="border border-[var(--border)] rounded-xl overflow-hidden">
-                                {group.options.map(option => {
-                                    const isSelected = isOptionSelected(group.name, option.name);
-                                    return (
-                                        <label
-                                            key={option.name}
-                                            className={`flex items-center justify-between px-5 py-4 cursor-pointer border-b border-[var(--border-light)] last:border-b-0 transition-colors ${
-                                                isSelected
-                                                    ? 'bg-pink-50'
-                                                    : 'hover:bg-[var(--background)]'
-                                            }`}
-                                            onClick={() => {
-                                                if (group.required) {
-                                                    handleSelectOption(group.name, option);
-                                                } else {
-                                                    handleToggleOption(group.name, option);
-                                                }
-                                            }}
-                                        >
-                                            <span className="font-medium">{option.name}</span>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-[var(--text-secondary)]">
-                                                    {option.priceAdjustment > 0 
-                                                        ? `+$${option.priceAdjustment.toFixed(2)}`
-                                                        : option.priceAdjustment < 0
-                                                            ? `-$${Math.abs(option.priceAdjustment).toFixed(2)}`
-                                                            : '$0.00'
-                                                    }
-                                                </span>
-                                                <div className={`w-5 h-5 rounded-full border-2 transition-all ${
-                                                    isSelected
-                                                        ? 'border-[var(--primary)] border-[5px]'
-                                                        : 'border-[var(--border)]'
-                                                }`} />
-                                            </div>
-                                            <input
-                                                type="radio"
-                                                name={`variation-${group.name}`}
-                                                className="sr-only"
-                                                checked={isSelected}
-                                                onChange={() => {}}
-                                            />
-                                        </label>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Notes Section */}
-                    <div className="mb-6">
-                        <h3 className="font-semibold mb-3">Special Instructions</h3>
-                        <textarea
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Add a note (e.g., allergies, preferences...)"
-                            className="w-full p-4 border border-[var(--border)] rounded-xl text-sm resize-none focus:outline-none focus:border-[var(--primary)]"
-                            rows={2}
-                        />
+                        )}
                     </div>
 
+                    <div className="p-5">
+                        <h2 className="text-2xl font-bold mb-1">{product.name}</h2>
+                        <p className="text-[var(--text-secondary)] text-sm mb-4">
+                            from ${product.basePrice.toFixed(2)}
+                        </p>
+                        <p className="text-[var(--text-secondary)] text-sm mb-6">
+                            {product.description}
+                        </p>
+
+                        {/* Variation Groups */}
+                        {product.variationGroups && product.variationGroups.length > 0 && product.variationGroups.map(group => (
+                            <div key={group.name} className="mb-6">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="font-semibold">{group.name}</h3>
+                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${group.required
+                                            ? 'bg-[var(--text-primary)] text-white'
+                                            : 'bg-gray-100 text-gray-500'
+                                        }`}>
+                                        {group.required ? 'Required' : 'Optional'}
+                                    </span>
+                                </div>
+
+                                <div className="border border-[var(--border)] rounded-xl overflow-hidden">
+                                    {group.options.map(option => {
+                                        const isSelected = isOptionSelected(group.name, option.name);
+                                        return (
+                                            <button
+                                                key={option.name}
+                                                type="button"
+                                                className={`w-full flex items-center justify-between px-5 py-4 border-b border-[var(--border-light)] last:border-b-0 transition-colors touch-manipulation text-left
+                                                ${isSelected
+                                                        ? 'bg-pink-50'
+                                                        : 'hover:bg-[var(--background)] active:bg-[var(--background)]'
+                                                    }`}
+                                                onClick={() => {
+                                                    if (group.required) {
+                                                        handleSelectOption(group.name, option);
+                                                    } else {
+                                                        handleToggleOption(group.name, option);
+                                                    }
+                                                }}
+                                            >
+                                                <span className="font-medium">{option.name}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[var(--text-secondary)]">
+                                                        {option.priceAdjustment > 0
+                                                            ? `+$${option.priceAdjustment.toFixed(2)}`
+                                                            : option.priceAdjustment < 0
+                                                                ? `-$${Math.abs(option.priceAdjustment).toFixed(2)}`
+                                                                : '$0.00'
+                                                        }
+                                                    </span>
+                                                    <div className={`w-5 h-5 rounded-full border-2 transition-all ${isSelected
+                                                            ? 'border-[var(--primary)] border-[5px]'
+                                                            : 'border-[var(--border)]'
+                                                        }`} />
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Notes Section */}
+                        <div className="mb-6">
+                            <h3 className="font-semibold mb-3">Special Instructions</h3>
+                            <textarea
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                placeholder="Add a note (e.g., allergies, preferences...)"
+                                className="w-full p-4 border border-[var(--border)] rounded-xl text-sm resize-none focus:outline-none focus:border-[var(--primary)]"
+                                rows={2}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Fixed Footer */}
+                <div className="p-5 border-t border-[var(--border-light)] bg-white/80 backdrop-blur-md sticky bottom-0">
                     <div className="flex items-center gap-4 safe-bottom">
                         <div className="quantity-control">
                             <button
@@ -281,8 +279,8 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                             </button>
                         </div>
 
-                        <button 
-                            className="btn-primary flex-1 disabled:opacity-50" 
+                        <button
+                            className="btn-primary flex-1 disabled:opacity-50"
                             onClick={handleAddToCart}
                             disabled={!allRequiredSelected}
                         >

@@ -272,10 +272,10 @@ export default function MenuPage() {
               placeholder="Search menu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 pl-11 bg-white rounded-xl border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              className="w-full px-4 py-3 !pl-12 bg-white rounded-xl border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
             />
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none"
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"

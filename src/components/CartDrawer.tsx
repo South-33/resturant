@@ -252,7 +252,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                             <h2 className="font-bold text-lg flex-1 text-left">Your Cart</h2>
                             <button
                                 onClick={handleClose}
-                                className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+                                className="w-11 h-11 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 active:bg-gray-300 active:scale-90 transition-all touch-manipulation"
                             >
                                 <IconClose className="w-5 h-5 text-gray-600" />
                             </button>
@@ -349,9 +349,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                         <div className="flex bg-gray-100 rounded-xl p-1 h-14">
                                             <button
                                                 onClick={() => setPaymentMethod('cash')}
-                                                className={`px-4 rounded-lg flex flex-col items-center justify-center transition-all ${paymentMethod === 'cash'
+                                                className={`px-4 rounded-lg flex flex-col items-center justify-center transition-all touch-manipulation ${paymentMethod === 'cash'
                                                     ? 'bg-white shadow-sm text-[var(--text-primary)]'
-                                                    : 'text-gray-400 hover:text-gray-600'
+                                                    : 'text-gray-400 hover:text-gray-600 active:bg-gray-200'
                                                     }`}
                                             >
                                                 <span className="text-lg leading-none mb-0.5">💵</span>
@@ -359,9 +359,9 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                             </button>
                                             <button
                                                 onClick={() => setPaymentMethod('khqr')}
-                                                className={`px-4 rounded-lg flex flex-col items-center justify-center transition-all ${paymentMethod === 'khqr'
+                                                className={`px-4 rounded-lg flex flex-col items-center justify-center transition-all touch-manipulation ${paymentMethod === 'khqr'
                                                     ? 'bg-white shadow-sm text-[var(--text-primary)]'
-                                                    : 'text-gray-400 hover:text-gray-600'
+                                                    : 'text-gray-400 hover:text-gray-600 active:bg-gray-200'
                                                     }`}
                                             >
                                                 <span className="text-lg leading-none mb-0.5">📱</span>
@@ -474,13 +474,13 @@ function CartItemCard({
                             <div>
                                 <div className="flex justify-between items-start">
                                     <h3 className="font-bold text-[15px] leading-tight pr-6">{item.product.name}</h3>
-                                    {/* Delete Button (Top Right) */}
-                                    <button
-                                        onClick={handleRemove}
-                                        className="absolute top-3 right-3 text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
-                                    >
-                                        <IconTrash className="w-4 h-4" />
-                                    </button>
+                                                {/* Delete Button (Top Right) */}
+                                                    <button
+                                                        onClick={handleRemove}
+                                                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 hover:bg-red-50 active:bg-red-100 active:scale-90 p-2 rounded-lg transition-all touch-manipulation"
+                                                    >
+                                                        <IconTrash className="w-4 h-4" />
+                                                    </button>
                                 </div>
                                 {variationsText && (
                                     <p className="text-xs text-[var(--text-secondary)] mt-1 font-medium bg-gray-50 inline-block px-2 py-0.5 rounded-md">
@@ -499,24 +499,24 @@ function CartItemCard({
                                     ${(itemPrice * item.quantity).toFixed(2)}
                                 </span>
 
-                                {/* Quantity Control Pill */}
-                                <div className="flex items-center bg-gray-100 rounded-lg p-1 h-8">
-                                    <button
-                                        className="w-7 h-full flex items-center justify-center text-gray-500 hover:bg-white hover:shadow-sm rounded-md transition-all active:scale-90"
-                                        onClick={handleDecrement}
-                                    >
-                                        <IconMinus className="w-3 h-3" />
-                                    </button>
-                                    <span className="w-8 text-center text-sm font-semibold">
-                                        {item.quantity}
-                                    </span>
-                                    <button
-                                        className="w-7 h-full flex items-center justify-center text-gray-500 hover:bg-white hover:shadow-sm rounded-md transition-all active:scale-90"
-                                        onClick={() => onUpdateQuantity(item.quantity + 1)}
-                                    >
-                                        <IconPlus className="w-3 h-3" />
-                                    </button>
-                                </div>
+                                            {/* Quantity Control Pill */}
+                                                <div className="flex items-center bg-gray-100 rounded-lg p-1 h-10">
+                                                    <button
+                                                        className="w-9 h-full flex items-center justify-center text-gray-500 hover:bg-white hover:shadow-sm active:bg-gray-200 active:scale-90 rounded-md transition-all touch-manipulation"
+                                                        onClick={handleDecrement}
+                                                    >
+                                                        <IconMinus className="w-4 h-4" />
+                                                    </button>
+                                                    <span className="w-8 text-center text-sm font-semibold select-none">
+                                                        {item.quantity}
+                                                    </span>
+                                                    <button
+                                                        className="w-9 h-full flex items-center justify-center text-gray-500 hover:bg-white hover:shadow-sm active:bg-gray-200 active:scale-90 rounded-md transition-all touch-manipulation"
+                                                        onClick={() => onUpdateQuantity(item.quantity + 1)}
+                                                    >
+                                                        <IconPlus className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                             </div>
                         </div>
                     </div>

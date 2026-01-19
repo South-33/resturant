@@ -57,6 +57,37 @@ export function IconFood({ className = 'w-4 h-4', ...props }: IconProps) {
     );
 }
 
+export function IconMenu({ className = 'w-5 h-5', ...props }: IconProps) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+    );
+}
+
+export function IconDoor({ className = 'w-4 h-4', ...props }: IconProps) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M3 3h18v18H3z" />
+            <path d="M9 3v18" />
+            <path d="M15 11v2" />
+        </svg>
+    );
+}
+
+export function IconTable({ className = 'w-4 h-4', ...props }: IconProps) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M12 3v18" />
+            <path d="M3 8h18" />
+            <path d="M3 3h18v18H3z" />
+            <path d="M3 13h18" />
+        </svg>
+    );
+}
+
 // UI Icons
 export function IconCart({ className = 'w-5 h-5', ...props }: IconProps) {
     return (
