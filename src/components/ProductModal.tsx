@@ -2,17 +2,29 @@
 
 // ============================================
 // PRODUCT MODAL - Reusable bottom sheet modal
-// Used in menu page and cart drawer
+// Supports multiple variation groups + notes
 // ============================================
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import {
     useCartStore,
     type Product,
-    type ProductVariation,
+    type SelectedVariation,
+    calculateItemPrice,
 } from '@/lib/store';
 import { IconClose } from '@/lib/icons';
+
+// Helper to validate URL
+function isValidUrl(urlString: string): boolean {
+    if (!urlString || urlString.trim() === '') return false;
+    try {
+        new URL(urlString);
+        return true;
+    } catch {
+        return false;
+    }
+}
 
 interface ProductModalProps {
     product: Product;
@@ -20,23 +32,119 @@ interface ProductModalProps {
 }
 
 export default function ProductModal({ product, onClose }: ProductModalProps) {
-    const [selectedVariation, setSelectedVariation] = useState<ProductVariation>(
-        product.variations[0]
-    );
+    // Initialize with default options or first option of each required group
+    const [selectedVariations, setSelectedVariations] = useState<SelectedVariation[]>(() => {
+        const initial: SelectedVariation[] = [];
+        
+        // Only process if variationGroups exists
+        if (product.variationGroups && product.variationGroups.length > 0) {
+            product.variationGroups.forEach(group => {
+                // For required groups, select default or first option
+                if (group.required && group.options.length > 0) {
+                    // Check if defaultOption is specified and exists
+                    let defaultOption = group.options[0];
+                    if (group.defaultOption) {
+                        const foundDefault = group.options.find(opt => opt.name === group.defaultOption);
+                        if (foundDefault) {
+                            defaultOption = foundDefault;
+                        }
+                    }
+                    
+                    initial.push({
+                        groupName: group.name,
+                        optionName: defaultOption.name,
+                        priceAdjustment: defaultOption.priceAdjustment,
+                    });
+                }
+                // For optional groups, select default if specified
+                else if (!group.required && group.defaultOption) {
+                    const defaultOpt = group.options.find(opt => opt.name === group.defaultOption);
+                    if (defaultOpt) {
+                        initial.push({
+                            groupName: group.name,
+                            optionName: defaultOpt.name,
+                            priceAdjustment: defaultOpt.priceAdjustment,
+                        });
+                    }
+                }
+            });
+        }
+        
+        return initial;
+    });
+    
+    const [notes, setNotes] = useState('');
     const [quantity, setQuantity] = useState(1);
     const [isClosing, setIsClosing] = useState(false);
     const addItem = useCartStore(state => state.addItem);
+
+    // Calculate total price
+    const itemPrice = useMemo(() => {
+        return calculateItemPrice(product.basePrice, selectedVariations);
+    }, [product.basePrice, selectedVariations]);
+
+    const totalPrice = itemPrice * quantity;
+
+    // Check if all required groups have selections
+    const allRequiredSelected = useMemo(() => {
+        if (!product.variationGroups || product.variationGroups.length === 0) {
+            return true; // No variation groups = always valid
+        }
+        
+        return product.variationGroups
+            .filter(g => g.required)
+            .every(group => 
+                selectedVariations.some(s => s.groupName === group.name)
+            );
+    }, [product.variationGroups, selectedVariations]);
 
     const handleClose = () => {
         setIsClosing(true);
         setTimeout(onClose, 200);
     };
 
+    const handleSelectOption = (groupName: string, option: { name: string; priceAdjustment: number }) => {
+        setSelectedVariations(prev => {
+            // Remove existing selection for this group
+            const filtered = prev.filter(s => s.groupName !== groupName);
+            // Add new selection
+            return [...filtered, {
+                groupName,
+                optionName: option.name,
+                priceAdjustment: option.priceAdjustment,
+            }];
+        });
+    };
+
+    const handleToggleOption = (groupName: string, option: { name: string; priceAdjustment: number }) => {
+        setSelectedVariations(prev => {
+            const existing = prev.find(s => s.groupName === groupName && s.optionName === option.name);
+            if (existing) {
+                // Remove if already selected (for optional groups)
+                return prev.filter(s => !(s.groupName === groupName && s.optionName === option.name));
+            } else {
+                // Add selection (replacing any existing for this group in single-select)
+                const filtered = prev.filter(s => s.groupName !== groupName);
+                return [...filtered, {
+                    groupName,
+                    optionName: option.name,
+                    priceAdjustment: option.priceAdjustment,
+                }];
+            }
+        });
+    };
+
     const handleAddToCart = () => {
+        if (!allRequiredSelected) return;
+        
         for (let i = 0; i < quantity; i++) {
-            addItem(product, selectedVariation);
+            addItem(product, selectedVariations, notes || undefined);
         }
         handleClose();
+    };
+
+    const isOptionSelected = (groupName: string, optionName: string) => {
+        return selectedVariations.some(s => s.groupName === groupName && s.optionName === optionName);
     };
 
     return (
@@ -56,14 +164,20 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                     <IconClose className="w-5 h-5" />
                 </button>
 
-                <div className="h-48 sm:h-56 relative">
-                    <Image
-                        src={product.imageUrl}
-                        alt={product.name}
-                        fill
-                        className="object-cover"
-                        sizes="100vw"
-                    />
+                <div className="h-48 sm:h-56 relative bg-stone-100">
+                    {product.imageUrl && isValidUrl(product.imageUrl) ? (
+                        <Image
+                            src={product.imageUrl}
+                            alt={product.name}
+                            fill
+                            className="object-cover"
+                            sizes="100vw"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center text-7xl">
+                            📦
+                        </div>
+                    )}
                 </div>
 
                 <div className="p-5">
@@ -75,43 +189,79 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                         {product.description}
                     </p>
 
-                    <div className="mb-6">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-semibold">Variation</h3>
-                            <span className="text-xs bg-[var(--text-primary)] text-white px-2 py-1 rounded-full">
-                                Required
-                            </span>
-                        </div>
+                    {/* Variation Groups */}
+                    {product.variationGroups && product.variationGroups.length > 0 && product.variationGroups.map(group => (
+                        <div key={group.name} className="mb-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="font-semibold">{group.name}</h3>
+                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                    group.required 
+                                        ? 'bg-[var(--text-primary)] text-white' 
+                                        : 'bg-gray-100 text-gray-500'
+                                }`}>
+                                    {group.required ? 'Required' : 'Optional'}
+                                </span>
+                            </div>
 
-                        <div className="border border-[var(--border)] rounded-xl overflow-hidden">
-                            {product.variations.map(variation => (
-                                <label
-                                    key={variation.name}
-                                    className={`flex items-center justify-between px-5 py-4 cursor-pointer border-b border-[var(--border-light)] last:border-b-0 transition-colors ${selectedVariation.name === variation.name
-                                        ? 'bg-[var(--primary-light)]'
-                                        : 'hover:bg-[var(--background)]'
-                                        }`}
-                                >
-                                    <span className="font-medium">{variation.name}</span>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-[var(--text-secondary)]">
-                                            ${variation.price.toFixed(2)}
-                                        </span>
-                                        <div className={`w-5 h-5 rounded-full border-2 transition-all ${selectedVariation.name === variation.name
-                                            ? 'border-[var(--primary)] border-[5px]'
-                                            : 'border-[var(--border)]'
-                                            }`} />
-                                    </div>
-                                    <input
-                                        type="radio"
-                                        name="variation"
-                                        className="sr-only"
-                                        checked={selectedVariation.name === variation.name}
-                                        onChange={() => setSelectedVariation(variation)}
-                                    />
-                                </label>
-                            ))}
+                            <div className="border border-[var(--border)] rounded-xl overflow-hidden">
+                                {group.options.map(option => {
+                                    const isSelected = isOptionSelected(group.name, option.name);
+                                    return (
+                                        <label
+                                            key={option.name}
+                                            className={`flex items-center justify-between px-5 py-4 cursor-pointer border-b border-[var(--border-light)] last:border-b-0 transition-colors ${
+                                                isSelected
+                                                    ? 'bg-pink-50'
+                                                    : 'hover:bg-[var(--background)]'
+                                            }`}
+                                            onClick={() => {
+                                                if (group.required) {
+                                                    handleSelectOption(group.name, option);
+                                                } else {
+                                                    handleToggleOption(group.name, option);
+                                                }
+                                            }}
+                                        >
+                                            <span className="font-medium">{option.name}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-[var(--text-secondary)]">
+                                                    {option.priceAdjustment > 0 
+                                                        ? `+$${option.priceAdjustment.toFixed(2)}`
+                                                        : option.priceAdjustment < 0
+                                                            ? `-$${Math.abs(option.priceAdjustment).toFixed(2)}`
+                                                            : '$0.00'
+                                                    }
+                                                </span>
+                                                <div className={`w-5 h-5 rounded-full border-2 transition-all ${
+                                                    isSelected
+                                                        ? 'border-[var(--primary)] border-[5px]'
+                                                        : 'border-[var(--border)]'
+                                                }`} />
+                                            </div>
+                                            <input
+                                                type="radio"
+                                                name={`variation-${group.name}`}
+                                                className="sr-only"
+                                                checked={isSelected}
+                                                onChange={() => {}}
+                                            />
+                                        </label>
+                                    );
+                                })}
+                            </div>
                         </div>
+                    ))}
+
+                    {/* Notes Section */}
+                    <div className="mb-6">
+                        <h3 className="font-semibold mb-3">Special Instructions</h3>
+                        <textarea
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            placeholder="Add a note (e.g., allergies, preferences...)"
+                            className="w-full p-4 border border-[var(--border)] rounded-xl text-sm resize-none focus:outline-none focus:border-[var(--primary)]"
+                            rows={2}
+                        />
                     </div>
 
                     <div className="flex items-center gap-4 safe-bottom">
@@ -131,8 +281,12 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
                             </button>
                         </div>
 
-                        <button className="btn-primary flex-1" onClick={handleAddToCart}>
-                            Add to cart · ${(selectedVariation.price * quantity).toFixed(2)}
+                        <button 
+                            className="btn-primary flex-1 disabled:opacity-50" 
+                            onClick={handleAddToCart}
+                            disabled={!allRequiredSelected}
+                        >
+                            Add to cart · ${totalPrice.toFixed(2)}
                         </button>
                     </div>
                 </div>

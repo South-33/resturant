@@ -613,3 +613,212 @@ body {
   outline: none;
   border-color: var(--primary);
 }
+
+/* ============================================
+   FORM ELEMENTS - Themed Dropdowns & Inputs
+   ============================================ */
+
+/* Select/Dropdown styling */
+select,
+.themed-select {
+  appearance: none;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 2.5rem 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23666666'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+}
+
+select:hover,
+.themed-select:hover {
+  border-color: var(--text-muted);
+  background-color: var(--background);
+}
+
+select:focus,
+.themed-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.1);
+  background-color: var(--surface);
+}
+
+select:disabled,
+.themed-select:disabled {
+  background-color: var(--background);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Option styling (limited browser support) */
+select option {
+  padding: 0.75rem;
+  background-color: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+select option:hover,
+select option:focus,
+select option:checked {
+  background-color: var(--primary);
+  background: linear-gradient(0deg, var(--primary) 0%, var(--primary) 100%);
+  color: white;
+  font-weight: 600;
+}
+
+select option:disabled {
+  color: var(--text-muted);
+  background-color: var(--background);
+}
+
+/* First option (placeholder) styling */
+select option:first-child {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Better focus styling for options in dropdown */
+select option:checked,
+select option:checked:hover {
+  background: var(--primary) !important;
+  color: white !important;
+}
+
+/* Text Input styling */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="url"],
+textarea,
+.themed-input {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+input[type="text"]:hover,
+input[type="number"]:hover,
+input[type="email"]:hover,
+input[type="url"]:hover,
+textarea:hover,
+.themed-input:hover {
+  border-color: var(--text-muted);
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="url"]:focus,
+textarea:focus,
+.themed-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.1);
+}
+
+input[type="text"]::placeholder,
+input[type="number"]::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+/* Checkbox styling */
+input[type="checkbox"] {
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 2px solid var(--border);
+  border-radius: 0.25rem;
+  background-color: var(--surface);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--primary);
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.1);
+}
+
+/* Notes textarea */
+.notes-input {
+  resize: none;
+  min-height: 3rem;
+  max-height: 6rem;
+}
+
+/* Variation Group Styles */
+.variation-group {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.variation-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--background);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.variation-group-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.variation-group-badge {
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--text-primary);
+  color: white;
+}
+
+.variation-group-badge.optional {
+  background: var(--background);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}

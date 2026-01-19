@@ -2,10 +2,10 @@
 
 // ============================================
 // CART DRAWER - Slide-in overlay cart
-// Now submits orders to Convex
+// Now supports multiple variations and notes
 // ============================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -14,6 +14,8 @@ import {
     useCartStore,
     type CartItem,
     type Product,
+    calculateItemPrice,
+    formatVariations,
 } from '@/lib/store';
 import {
     IconCart,
@@ -25,7 +27,7 @@ import {
 } from '@/lib/icons';
 import ProductModal from '@/components/ProductModal';
 
-// Type from Convex
+// Type from Convex (new structure)
 interface ConvexProduct {
     _id: Id<"products">;
     _creationTime: number;
@@ -35,7 +37,12 @@ interface ConvexProduct {
     imageUrl: string;
     basePrice: number;
     isPopular: boolean;
-    variations: { name: string; price: number }[];
+    variationGroups: {
+        name: string;
+        required: boolean;
+        options: { name: string; priceAdjustment: number }[];
+    }[];
+    variations?: { name: string; price: number }[];
 }
 
 // Convert to local type
@@ -48,6 +55,7 @@ function toLocalProduct(p: ConvexProduct): Product {
         imageUrl: p.imageUrl,
         basePrice: p.basePrice,
         isPopular: p.isPopular,
+        variationGroups: p.variationGroups,
         variations: p.variations,
     };
 }
@@ -62,10 +70,17 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     const [orderPlaced, setOrderPlaced] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'khqr'>('cash');
-    const [tableId, setTableId] = useState('T1');
+    const tableId = 'T1'; // Default table - can be made dynamic later
     const [inlineProduct, setInlineProduct] = useState<Product | null>(null);
     const [canAnimateItems, setCanAnimateItems] = useState(false);
     const [orderNumber, setOrderNumber] = useState<number | null>(null);
+
+    // Swipe gesture state
+    const [swipeOffset, setSwipeOffset] = useState(0);
+    const [isSwiping, setIsSwiping] = useState(false);
+    const touchStartX = useRef(0);
+    const touchStartY = useRef(0);
+    const drawerRef = useRef<HTMLDivElement>(null);
 
     const items = useCartStore(state => state.items);
     const updateQuantity = useCartStore(state => state.updateQuantity);
@@ -89,6 +104,8 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
     // Handle close with animation
     const handleClose = () => {
+        setSwipeOffset(0);
+        setIsSwiping(false);
         setIsClosing(true);
         setTimeout(() => {
             setIsClosing(false);
@@ -101,6 +118,35 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 }, 300);
             }
         }, 200);
+    };
+
+    // Swipe gesture handlers
+    const handleTouchStart = (e: React.TouchEvent) => {
+        touchStartX.current = e.touches[0].clientX;
+        touchStartY.current = e.touches[0].clientY;
+        setIsSwiping(false);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        const deltaX = e.touches[0].clientX - touchStartX.current;
+        const deltaY = e.touches[0].clientY - touchStartY.current;
+
+        // Only allow horizontal swipe (right direction) if horizontal movement > vertical
+        if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+            setIsSwiping(true);
+            setSwipeOffset(Math.min(deltaX, 400)); // Cap at 400px
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (swipeOffset > 100) {
+            // If swiped more than 100px, close the drawer
+            handleClose();
+        } else {
+            // Snap back
+            setSwipeOffset(0);
+        }
+        setIsSwiping(false);
     };
 
     // Prevent body scroll when drawer is open
@@ -130,15 +176,21 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         setIsSubmitting(true);
 
         try {
-            // Submit to Convex
+            // Submit to Convex with new structure
             const result = await createOrder({
                 tableId,
-                items: items.map(item => ({
-                    productName: item.product.name,
-                    variation: item.variation.name,
-                    quantity: item.quantity,
-                    price: item.variation.price * item.quantity,
-                })),
+                items: items.map(item => {
+                    const itemPrice = calculateItemPrice(item.product.basePrice, item.selectedVariations);
+                    return {
+                        productName: item.product.name,
+                        selectedVariations: item.selectedVariations && item.selectedVariations.length > 0 
+                            ? item.selectedVariations 
+                            : undefined,
+                        notes: item.notes || undefined,
+                        quantity: item.quantity,
+                        price: itemPrice * item.quantity,
+                    };
+                }),
                 total: total,
             });
 
@@ -164,7 +216,17 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             />
 
             {/* Drawer */}
-            <div className={`fixed inset-y-0 right-0 w-full max-w-md bg-[var(--background)] z-50 flex flex-col shadow-2xl ${isClosing ? 'animate-slideOutRight' : 'animate-slideInRight'}`}>
+            <div
+                ref={drawerRef}
+                className={`fixed inset-y-0 right-0 w-full max-w-md bg-[var(--background)] z-50 flex flex-col shadow-2xl ${isClosing ? 'animate-slideOutRight' : 'animate-slideInRight'}`}
+                style={{
+                    transform: swipeOffset > 0 ? `translateX(${swipeOffset}px)` : undefined,
+                    transition: isSwiping ? 'none' : 'transform 0.2s ease-out',
+                }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+            >
                 {orderPlaced ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-white">
                         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6 animate-bounce">
@@ -204,7 +266,7 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                 </div>
                                 <h3 className="text-xl font-bold mb-2">Your cart is empty</h3>
                                 <p className="text-[var(--text-muted)] mb-8 max-w-xs mx-auto">
-                                    Looks like you haven't added anything to your cart yet.
+                                    Looks like you haven&apos;t added anything to your cart yet.
                                 </p>
                                 <button onClick={handleClose} className="btn-primary px-8">
                                     Start Ordering
@@ -228,58 +290,42 @@ export default function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                                     </div>
 
                                     {/* Suggestions Section */}
-                                    <div className="px-5 pb-8">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-bold text-sm">Popular with your order</h3>
+                                    {popularProducts.length > 0 && (
+                                        <div className="px-5 pb-8">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="font-bold text-sm">Popular with your order</h3>
+                                            </div>
+                                            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-4 -mx-5 px-5">
+                                                {popularProducts.slice(0, 4).map(product => (
+                                                    <button
+                                                        key={product.id}
+                                                        onClick={() => setInlineProduct(product)}
+                                                        className="flex-shrink-0 w-32 bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 text-left active:scale-95 transition-transform"
+                                                    >
+                                                        <div className="h-24 relative bg-gray-100">
+                                                            <Image
+                                                                src={product.imageUrl}
+                                                                alt={product.name}
+                                                                fill
+                                                                className="object-cover"
+                                                                sizes="128px"
+                                                            />
+                                                        </div>
+                                                        <div className="p-3">
+                                                            <p className="font-semibold text-sm line-clamp-1 mb-1">{product.name}</p>
+                                                            <p className="text-xs text-[var(--text-secondary)]">
+                                                                ${product.basePrice.toFixed(2)}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-4 -mx-5 px-5">
-                                            {popularProducts.slice(0, 4).map(product => (
-                                                <button
-                                                    key={product.id}
-                                                    onClick={() => setInlineProduct(product)}
-                                                    className="flex-shrink-0 w-32 bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 text-left active:scale-95 transition-transform"
-                                                >
-                                                    <div className="h-24 relative bg-gray-100">
-                                                        <Image
-                                                            src={product.imageUrl}
-                                                            alt={product.name}
-                                                            fill
-                                                            className="object-cover"
-                                                            sizes="128px"
-                                                        />
-                                                    </div>
-                                                    <div className="p-3">
-                                                        <p className="font-semibold text-sm line-clamp-1 mb-1">{product.name}</p>
-                                                        <p className="text-xs text-[var(--text-secondary)]">
-                                                            ${product.basePrice.toFixed(2)}
-                                                        </p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
 
-                                {/* Footer - Table Selection & Payment */}
+                                {/* Footer - Payment */}
                                 <div className="bg-white border-t border-[var(--border-light)] p-5 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-
-                                    {/* Table Selection */}
-                                    <div className="mb-4">
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
-                                            Select Table
-                                        </label>
-                                        <select
-                                            className="w-full bg-gray-50 border border-gray-200 text-gray-800 text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent appearance-none"
-                                            value={tableId}
-                                            onChange={(e) => setTableId(e.target.value)}
-                                        >
-                                            {Array.from({ length: 12 }).map((_, i) => (
-                                                <option key={i} value={`T${i + 1}`}>
-                                                    Table {i + 1}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
 
                                     {/* Subtotal Details */}
                                     <div className="space-y-3 mb-6">
@@ -373,12 +419,16 @@ function CartItemCard({
 }) {
     const [isVisible, setIsVisible] = useState(!shouldAnimateEnter);
 
+    // Calculate item price
+    const itemPrice = calculateItemPrice(item.product.basePrice, item.selectedVariations);
+    const variationsText = formatVariations(item.selectedVariations);
+
     useEffect(() => {
         if (shouldAnimateEnter) {
             const timer = requestAnimationFrame(() => setIsVisible(true));
             return () => cancelAnimationFrame(timer);
         }
-    }, []);
+    }, [shouldAnimateEnter]);
 
     const handleRemove = () => {
         setIsVisible(false);
@@ -432,14 +482,21 @@ function CartItemCard({
                                         <IconTrash className="w-4 h-4" />
                                     </button>
                                 </div>
-                                <p className="text-xs text-[var(--text-secondary)] mt-1 font-medium bg-gray-50 inline-block px-2 py-0.5 rounded-md">
-                                    {item.variation.name}
-                                </p>
+                                {variationsText && (
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1 font-medium bg-gray-50 inline-block px-2 py-0.5 rounded-md">
+                                        {variationsText}
+                                    </p>
+                                )}
+                                {item.notes && (
+                                    <p className="text-xs text-blue-600 mt-1 italic line-clamp-1">
+                                        📝 {item.notes}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="flex items-end justify-between mt-2">
                                 <span className="font-bold text-[15px]">
-                                    ${(item.variation.price * item.quantity).toFixed(2)}
+                                    ${(itemPrice * item.quantity).toFixed(2)}
                                 </span>
 
                                 {/* Quantity Control Pill */}

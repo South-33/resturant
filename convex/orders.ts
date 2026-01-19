@@ -23,6 +23,13 @@ const paymentStatusValidator = v.union(
     v.literal("paid")
 );
 
+// Selected variation for an order item
+const selectedVariationValidator = v.object({
+    groupName: v.string(),
+    optionName: v.string(),
+    priceAdjustment: v.number(),
+});
+
 // Return type for orders with items
 type OrderWithItems = Doc<"orders"> & { items: Doc<"orderItems">[] };
 
@@ -172,7 +179,8 @@ export const createOrder = mutation({
             v.object({
                 productId: v.optional(v.id("products")),
                 productName: v.string(),
-                variation: v.string(),
+                selectedVariations: v.optional(v.array(selectedVariationValidator)),
+                notes: v.optional(v.string()),
                 quantity: v.number(),
                 price: v.number(),
             })
@@ -205,7 +213,8 @@ export const createOrder = mutation({
                     orderId,
                     productId: item.productId,
                     productName: item.productName,
-                    variation: item.variation,
+                    selectedVariations: item.selectedVariations || undefined,
+                    notes: item.notes,
                     quantity: item.quantity,
                     price: item.price,
                 })
@@ -238,11 +247,13 @@ export const updateOrderStatus = mutation({
 
 /**
  * Update payment status (Cashier workflow)
+ * If paymentMethod is 'khqr', auto-set to paid
  */
 export const updatePaymentStatus = mutation({
     args: {
         orderId: v.id("orders"),
         paymentStatus: paymentStatusValidator,
+        paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("khqr"))),
     },
     handler: async (ctx, args) => {
         const order = await ctx.db.get(args.orderId);
@@ -250,7 +261,10 @@ export const updatePaymentStatus = mutation({
             throw new Error("Order not found");
         }
 
-        await ctx.db.patch(args.orderId, { paymentStatus: args.paymentStatus });
+        await ctx.db.patch(args.orderId, {
+            paymentStatus: args.paymentStatus,
+            ...(args.paymentMethod && { paymentMethod: args.paymentMethod }),
+        });
         return { success: true };
     },
 });

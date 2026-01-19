@@ -13,7 +13,6 @@ import type { Id } from '../../convex/_generated/dataModel';
 import {
   useCartStore,
   type Product,
-  type ProductVariation,
 } from '@/lib/store';
 import {
   IconCart,
@@ -47,7 +46,12 @@ interface ConvexProduct {
   imageUrl: string;
   basePrice: number;
   isPopular: boolean;
-  variations: { name: string; price: number }[];
+  variationGroups: {
+    name: string;
+    required: boolean;
+    options: { name: string; priceAdjustment: number }[];
+  }[];
+  variations?: { name: string; price: number }[];
 }
 
 // Convert Convex product to local Product type (for cart compatibility)
@@ -60,8 +64,20 @@ function toLocalProduct(p: ConvexProduct): Product {
     imageUrl: p.imageUrl,
     basePrice: p.basePrice,
     isPopular: p.isPopular,
+    variationGroups: p.variationGroups,
     variations: p.variations,
   };
+}
+
+// Helper to validate URL
+function isValidUrl(urlString: string): boolean {
+  if (!urlString || urlString.trim() === '') return false;
+  try {
+    new URL(urlString);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ============================================
@@ -256,10 +272,10 @@ export default function MenuPage() {
               placeholder="Search menu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 pl-10 bg-white rounded-xl border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
+              className="w-full px-4 py-3 pl-11 bg-white rounded-xl border border-[var(--border)] text-sm focus:outline-none focus:border-[var(--primary)]"
             />
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -291,7 +307,7 @@ export default function MenuPage() {
         {filteredProducts ? (
           <section className="mb-8">
             <h2 className="text-lg font-bold mb-4">
-              {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for "{searchQuery}"
+              {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for &quot;{searchQuery}&quot;
             </h2>
             {filteredProducts.length === 0 ? (
               <p className="text-[var(--text-muted)] text-center py-8">No products found</p>
@@ -306,9 +322,22 @@ export default function MenuPage() {
                       cartQuantity={cartQty}
                       onSelect={() => setSelectedProduct(product)}
                       onQuickAdd={() => {
-                        if (product.variations.length === 1) {
-                          addItem(product, product.variations[0]);
+                        // Check if product has variation groups that require user selection
+                        const hasChoices = product.variationGroups?.some(group => 
+                          group.options.length > 1
+                        );
+                        
+                        if (!hasChoices) {
+                          // No choices to make - add directly with default selections
+                          const defaultSelections = product.variationGroups?.map(group => ({
+                            groupName: group.name,
+                            optionName: group.options[0].name,
+                            priceAdjustment: group.options[0].priceAdjustment,
+                          })) || [];
+                          
+                          addItem(product, defaultSelections.length > 0 ? defaultSelections : undefined);
                         } else {
+                          // Has variations to choose from - open modal
                           setSelectedProduct(product);
                         }
                       }}
@@ -372,9 +401,22 @@ export default function MenuPage() {
                         cartQuantity={cartQty}
                         onSelect={() => setSelectedProduct(product)}
                         onQuickAdd={() => {
-                          if (product.variations.length === 1) {
-                            addItem(product, product.variations[0]);
+                          // Check if product has variation groups that require user selection
+                          const hasChoices = product.variationGroups?.some(group => 
+                            group.options.length > 1
+                          );
+                          
+                          if (!hasChoices) {
+                            // No choices to make - add directly with default selections
+                            const defaultSelections = product.variationGroups?.map(group => ({
+                              groupName: group.name,
+                              optionName: group.options[0].name,
+                              priceAdjustment: group.options[0].priceAdjustment,
+                            })) || [];
+                            
+                            addItem(product, defaultSelections.length > 0 ? defaultSelections : undefined);
                           } else {
+                            // Has variations to choose from - open modal
                             setSelectedProduct(product);
                           }
                         }}
@@ -428,17 +470,25 @@ function ProductCard({
   product: Product;
   onSelect: () => void;
 }) {
+  const hasValidImage = isValidUrl(product.imageUrl);
+  
   return (
     <div className="product-card cursor-pointer" onClick={onSelect}>
       <div className="relative">
         <div className="product-card-image overflow-hidden">
-          <Image
-            src={product.imageUrl}
-            alt={product.name}
-            fill
-            className="object-cover"
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          />
+          {hasValidImage ? (
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              className="object-cover"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            />
+          ) : (
+            <div className="w-full h-full bg-stone-100 flex items-center justify-center text-6xl">
+              📦
+            </div>
+          )}
         </div>
 
         <button
@@ -485,6 +535,8 @@ function ProductListItem({
   onSelect: () => void;
   onQuickAdd?: () => void;
 }) {
+  const hasValidImage = isValidUrl(product.imageUrl);
+  
   return (
     <div
       className="flex gap-4 py-4 border-b border-[var(--border-light)] cursor-pointer hover:bg-black/[0.01] transition-colors"
@@ -505,14 +557,20 @@ function ProductListItem({
 
       <div className="flex-shrink-0">
         <div className="w-24 h-24 rounded-xl overflow-visible relative">
-          <div className="w-full h-full rounded-xl overflow-hidden relative">
-            <Image
-              src={product.imageUrl}
-              alt={product.name}
-              fill
-              className="object-cover"
-              sizes="96px"
-            />
+          <div className="w-full h-full rounded-xl overflow-hidden relative bg-stone-100">
+            {hasValidImage ? (
+              <Image
+                src={product.imageUrl}
+                alt={product.name}
+                fill
+                className="object-cover"
+                sizes="96px"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-3xl">
+                📦
+              </div>
+            )}
           </div>
           <button
             className={`absolute -bottom-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm transition-colors leading-none ${cartQuantity > 0

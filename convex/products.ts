@@ -10,7 +10,21 @@ import { Id } from "./_generated/dataModel";
 // SHARED VALIDATORS
 // ============================================
 
-const variationValidator = v.object({
+// New variation group structure
+const variationOptionValidator = v.object({
+    name: v.string(),
+    priceAdjustment: v.number(),
+});
+
+const variationGroupValidator = v.object({
+    name: v.string(),
+    required: v.boolean(),
+    defaultOption: v.optional(v.string()), // Default option to select
+    options: v.array(variationOptionValidator),
+});
+
+// Legacy variation validator (for backwards compatibility)
+const legacyVariationValidator = v.object({
     name: v.string(),
     price: v.number(),
 });
@@ -209,7 +223,9 @@ export const createProduct = mutation({
         imageUrl: v.string(),
         basePrice: v.number(),
         isPopular: v.optional(v.boolean()),
-        variations: v.array(variationValidator),
+        variationGroups: v.optional(v.array(variationGroupValidator)),
+        // Legacy support
+        variations: v.optional(v.array(legacyVariationValidator)),
     },
     handler: async (ctx, args) => {
         // Verify category exists
@@ -218,10 +234,8 @@ export const createProduct = mutation({
             throw new Error("Category not found");
         }
 
-        // Validate variations
-        if (args.variations.length === 0) {
-            throw new Error("Product must have at least one variation");
-        }
+        // Products can have variationGroups, legacy variations, or neither (simple products)
+        // No validation needed - all are valid
 
         const productId = await ctx.db.insert("products", {
             categoryId: args.categoryId,
@@ -230,6 +244,7 @@ export const createProduct = mutation({
             imageUrl: args.imageUrl,
             basePrice: args.basePrice,
             isPopular: args.isPopular ?? false,
+            variationGroups: args.variationGroups,
             variations: args.variations,
         });
 
@@ -249,7 +264,8 @@ export const updateProduct = mutation({
         imageUrl: v.optional(v.string()),
         basePrice: v.optional(v.number()),
         isPopular: v.optional(v.boolean()),
-        variations: v.optional(v.array(variationValidator)),
+        variationGroups: v.optional(v.array(variationGroupValidator)),
+        variations: v.optional(v.array(legacyVariationValidator)),
     },
     handler: async (ctx, args) => {
         const { productId, ...updates } = args;
@@ -267,15 +283,18 @@ export const updateProduct = mutation({
             }
         }
 
-        // Validate variations if provided
-        if (updates.variations && updates.variations.length === 0) {
-            throw new Error("Product must have at least one variation");
-        }
+        // Allow empty variation groups (simple products with no options)
+        // No validation needed - products can have 0 variation groups
 
-        // Filter out undefined values
-        const validUpdates = Object.fromEntries(
-            Object.entries(updates).filter(([_, v]) => v !== undefined)
-        );
+        // Build update object, keeping undefined values to allow clearing fields
+        const validUpdates: any = {};
+        for (const [key, value] of Object.entries(updates)) {
+            // Include the value even if it's an empty array or undefined
+            // This allows clearing variationGroups by setting it to undefined or []
+            if (value !== undefined || key === 'variationGroups') {
+                validUpdates[key] = value;
+            }
+        }
 
         if (Object.keys(validUpdates).length > 0) {
             await ctx.db.patch(productId, validUpdates);
@@ -317,6 +336,72 @@ export const toggleProductPopular = mutation({
     },
 });
 
+/**
+ * Toggle product active status (in stock / out of stock)
+ */
+export const toggleProductActive = mutation({
+    args: { productId: v.id("products") },
+    handler: async (ctx, args) => {
+        const product = await ctx.db.get(args.productId);
+        if (!product) {
+            throw new Error("Product not found");
+        }
+
+        const newActive = !(product.isActive ?? true);
+        await ctx.db.patch(args.productId, { isActive: newActive });
+        return { isActive: newActive };
+    },
+});
+
+/**
+ * Bulk toggle active status
+ */
+export const bulkToggleActive = mutation({
+    args: {
+        productIds: v.array(v.id("products")),
+        isActive: v.boolean(),
+    },
+    handler: async (ctx, args) => {
+        await Promise.all(
+            args.productIds.map((id) =>
+                ctx.db.patch(id, { isActive: args.isActive })
+            )
+        );
+        return { updated: args.productIds.length };
+    },
+});
+
+/**
+ * Bulk delete products
+ */
+export const bulkDeleteProducts = mutation({
+    args: {
+        productIds: v.array(v.id("products")),
+    },
+    handler: async (ctx, args) => {
+        await Promise.all(args.productIds.map((id) => ctx.db.delete(id)));
+        return { deleted: args.productIds.length };
+    },
+});
+
+/**
+ * Bulk toggle popular status
+ */
+export const bulkTogglePopular = mutation({
+    args: {
+        productIds: v.array(v.id("products")),
+        isPopular: v.boolean(),
+    },
+    handler: async (ctx, args) => {
+        await Promise.all(
+            args.productIds.map((id) =>
+                ctx.db.patch(id, { isPopular: args.isPopular })
+            )
+        );
+        return { updated: args.productIds.length };
+    },
+});
+
 // ============================================
 // SEED DATA (for initial setup)
 // ============================================
@@ -344,7 +429,7 @@ export const seedMenuData = mutation({
             categoryIds[cat.name] = id;
         }
 
-        // Seed products
+        // Seed products with new variationGroups structure
         const productData = [
             // Coffee
             {
@@ -354,10 +439,27 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&h=400&fit=crop",
                 basePrice: 1.6,
                 isPopular: true,
-                variations: [
-                    { name: "Hot", price: 1.6 },
-                    { name: "Iced", price: 2.15 },
-                    { name: "Frappe", price: 2.3 },
+                variationGroups: [
+                    {
+                        name: "Temperature",
+                        required: true,
+                        options: [
+                            { name: "Hot", priceAdjustment: 0 },
+                            { name: "Iced", priceAdjustment: 0.55 },
+                            { name: "Frappe", priceAdjustment: 0.7 },
+                        ],
+                    },
+                    {
+                        name: "Sugar Level",
+                        required: false,
+                        options: [
+                            { name: "0%", priceAdjustment: 0 },
+                            { name: "25%", priceAdjustment: 0 },
+                            { name: "50%", priceAdjustment: 0 },
+                            { name: "75%", priceAdjustment: 0 },
+                            { name: "100%", priceAdjustment: 0 },
+                        ],
+                    },
                 ],
             },
             {
@@ -367,9 +469,24 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=400&h=400&fit=crop",
                 basePrice: 2.0,
                 isPopular: true,
-                variations: [
-                    { name: "Hot", price: 2.0 },
-                    { name: "Iced", price: 2.5 },
+                variationGroups: [
+                    {
+                        name: "Temperature",
+                        required: true,
+                        options: [
+                            { name: "Hot", priceAdjustment: 0 },
+                            { name: "Iced", priceAdjustment: 0.5 },
+                        ],
+                    },
+                    {
+                        name: "Sugar Level",
+                        required: false,
+                        options: [
+                            { name: "Less Sweet", priceAdjustment: 0 },
+                            { name: "Normal", priceAdjustment: 0 },
+                            { name: "Extra Sweet", priceAdjustment: 0 },
+                        ],
+                    },
                 ],
             },
             {
@@ -379,9 +496,23 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&h=400&fit=crop",
                 basePrice: 1.6,
                 isPopular: true,
-                variations: [
-                    { name: "Hot", price: 1.6 },
-                    { name: "Iced", price: 2.15 },
+                variationGroups: [
+                    {
+                        name: "Temperature",
+                        required: true,
+                        options: [
+                            { name: "Hot", priceAdjustment: 0 },
+                            { name: "Iced", priceAdjustment: 0.55 },
+                        ],
+                    },
+                    {
+                        name: "Size",
+                        required: false,
+                        options: [
+                            { name: "Regular", priceAdjustment: 0 },
+                            { name: "Large", priceAdjustment: 0.5 },
+                        ],
+                    },
                 ],
             },
             {
@@ -391,10 +522,25 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=400&h=400&fit=crop",
                 basePrice: 1.75,
                 isPopular: true,
-                variations: [
-                    { name: "Hot", price: 1.75 },
-                    { name: "Iced", price: 2.25 },
-                    { name: "Frappe", price: 2.5 },
+                variationGroups: [
+                    {
+                        name: "Temperature",
+                        required: true,
+                        options: [
+                            { name: "Hot", priceAdjustment: 0 },
+                            { name: "Iced", priceAdjustment: 0.5 },
+                            { name: "Frappe", priceAdjustment: 0.75 },
+                        ],
+                    },
+                    {
+                        name: "Extra Shot",
+                        required: false,
+                        options: [
+                            { name: "No Extra", priceAdjustment: 0 },
+                            { name: "+1 Shot", priceAdjustment: 0.5 },
+                            { name: "+2 Shots", priceAdjustment: 1.0 },
+                        ],
+                    },
                 ],
             },
             {
@@ -404,9 +550,15 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1578314675249-a6910f80cc4e?w=400&h=400&fit=crop",
                 basePrice: 2.2,
                 isPopular: false,
-                variations: [
-                    { name: "Hot", price: 2.2 },
-                    { name: "Iced", price: 2.7 },
+                variationGroups: [
+                    {
+                        name: "Temperature",
+                        required: true,
+                        options: [
+                            { name: "Hot", priceAdjustment: 0 },
+                            { name: "Iced", priceAdjustment: 0.5 },
+                        ],
+                    },
                 ],
             },
             // Tea
@@ -417,9 +569,24 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?w=400&h=400&fit=crop",
                 basePrice: 1.8,
                 isPopular: true,
-                variations: [
-                    { name: "Hot", price: 1.8 },
-                    { name: "Iced", price: 2.3 },
+                variationGroups: [
+                    {
+                        name: "Temperature",
+                        required: true,
+                        options: [
+                            { name: "Hot", priceAdjustment: 0 },
+                            { name: "Iced", priceAdjustment: 0.5 },
+                        ],
+                    },
+                    {
+                        name: "Sugar Level",
+                        required: false,
+                        options: [
+                            { name: "0%", priceAdjustment: 0 },
+                            { name: "50%", priceAdjustment: 0 },
+                            { name: "100%", priceAdjustment: 0 },
+                        ],
+                    },
                 ],
             },
             {
@@ -429,9 +596,24 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1558857563-b371033873b8?w=400&h=400&fit=crop",
                 basePrice: 2.0,
                 isPopular: true,
-                variations: [
-                    { name: "Iced", price: 2.0 },
-                    { name: "Frappe", price: 2.5 },
+                variationGroups: [
+                    {
+                        name: "Temperature",
+                        required: true,
+                        options: [
+                            { name: "Iced", priceAdjustment: 0 },
+                            { name: "Frappe", priceAdjustment: 0.5 },
+                        ],
+                    },
+                    {
+                        name: "Ice Level",
+                        required: false,
+                        options: [
+                            { name: "Less Ice", priceAdjustment: 0 },
+                            { name: "Normal Ice", priceAdjustment: 0 },
+                            { name: "Extra Ice", priceAdjustment: 0 },
+                        ],
+                    },
                 ],
             },
             {
@@ -441,9 +623,15 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1564890369478-c89ca6d9cde9?w=400&h=400&fit=crop",
                 basePrice: 1.5,
                 isPopular: false,
-                variations: [
-                    { name: "Hot", price: 1.5 },
-                    { name: "Iced", price: 1.8 },
+                variationGroups: [
+                    {
+                        name: "Temperature",
+                        required: true,
+                        options: [
+                            { name: "Hot", priceAdjustment: 0 },
+                            { name: "Iced", priceAdjustment: 0.3 },
+                        ],
+                    },
                 ],
             },
             // Smoothies
@@ -454,7 +642,16 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1623065422902-30a2d299bbe4?w=400&h=400&fit=crop",
                 basePrice: 2.5,
                 isPopular: false,
-                variations: [{ name: "Regular", price: 2.5 }],
+                variationGroups: [
+                    {
+                        name: "Size",
+                        required: true,
+                        options: [
+                            { name: "Regular", priceAdjustment: 0 },
+                            { name: "Large", priceAdjustment: 1.0 },
+                        ],
+                    },
+                ],
             },
             {
                 categoryId: categoryIds["Juice & Smoothies"],
@@ -463,7 +660,16 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=400&h=400&fit=crop",
                 basePrice: 2.8,
                 isPopular: false,
-                variations: [{ name: "Regular", price: 2.8 }],
+                variationGroups: [
+                    {
+                        name: "Size",
+                        required: true,
+                        options: [
+                            { name: "Regular", priceAdjustment: 0 },
+                            { name: "Large", priceAdjustment: 1.0 },
+                        ],
+                    },
+                ],
             },
             // Food
             {
@@ -473,7 +679,17 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&h=400&fit=crop",
                 basePrice: 1.2,
                 isPopular: false,
-                variations: [{ name: "Plain", price: 1.2 }],
+                variationGroups: [
+                    {
+                        name: "Type",
+                        required: true,
+                        options: [
+                            { name: "Plain", priceAdjustment: 0 },
+                            { name: "Chocolate", priceAdjustment: 0.5 },
+                            { name: "Almond", priceAdjustment: 0.7 },
+                        ],
+                    },
+                ],
             },
             {
                 categoryId: categoryIds["Food"],
@@ -482,7 +698,16 @@ export const seedMenuData = mutation({
                 imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&h=400&fit=crop",
                 basePrice: 2.5,
                 isPopular: false,
-                variations: [{ name: "Slice", price: 2.5 }],
+                variationGroups: [
+                    {
+                        name: "Size",
+                        required: true,
+                        options: [
+                            { name: "Slice", priceAdjustment: 0 },
+                            { name: "Whole Cake", priceAdjustment: 15.0 },
+                        ],
+                    },
+                ],
             },
         ];
 
@@ -495,6 +720,188 @@ export const seedMenuData = mutation({
             seeded: true,
             categoriesCount: categoryData.length,
             productsCount: productData.length,
+        };
+    },
+});
+
+/**
+ * Validate variation groups in products and identify issues
+ */
+export const validateProductVariations = query({
+    args: {},
+    handler: async (ctx) => {
+        const allProducts = await ctx.db.query("products").collect();
+        const issues: Array<{
+            productId: string;
+            productName: string;
+            issue: string;
+            severity: "error" | "warning";
+        }> = [];
+
+        for (const product of allProducts) {
+            // Check for products with variationGroups
+            if (product.variationGroups && product.variationGroups.length > 0) {
+                // Check each variation group
+                for (const group of product.variationGroups) {
+                    // Empty options
+                    if (!group.options || group.options.length === 0) {
+                        issues.push({
+                            productId: product._id,
+                            productName: product.name,
+                            issue: `Variation group "${group.name}" has no options`,
+                            severity: "error",
+                        });
+                    }
+
+                    // Check for duplicate option names
+                    if (group.options) {
+                        const optionNames = group.options.map((o) => o.name);
+                        const duplicates = optionNames.filter(
+                            (name, index) => optionNames.indexOf(name) !== index
+                        );
+                        if (duplicates.length > 0) {
+                            issues.push({
+                                productId: product._id,
+                                productName: product.name,
+                                issue: `Variation group "${group.name}" has duplicate options: ${duplicates.join(", ")}`,
+                                severity: "warning",
+                            });
+                        }
+                    }
+                }
+
+                // Check for duplicate group names
+                const groupNames = product.variationGroups.map((g) => g.name);
+                const duplicateGroups = groupNames.filter(
+                    (name, index) => groupNames.indexOf(name) !== index
+                );
+                if (duplicateGroups.length > 0) {
+                    issues.push({
+                        productId: product._id,
+                        productName: product.name,
+                        issue: `Product has duplicate variation groups: ${duplicateGroups.join(", ")}`,
+                        severity: "warning",
+                    });
+                }
+            }
+
+            // Check for negative prices
+            if (product.basePrice < 0) {
+                issues.push({
+                    productId: product._id,
+                    productName: product.name,
+                    issue: `Base price is negative: $${product.basePrice}`,
+                    severity: "error",
+                });
+            }
+
+            // Check for price adjustments that would result in negative final price
+            if (product.variationGroups) {
+                for (const group of product.variationGroups) {
+                    for (const option of group.options) {
+                        const finalPrice = product.basePrice + option.priceAdjustment;
+                        if (finalPrice < 0) {
+                            issues.push({
+                                productId: product._id,
+                                productName: product.name,
+                                issue: `Option "${option.name}" in "${group.name}" would result in negative price: $${finalPrice.toFixed(2)}`,
+                                severity: "error",
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        return {
+            totalProducts: allProducts.length,
+            issuesFound: issues.length,
+            errors: issues.filter((i) => i.severity === "error").length,
+            warnings: issues.filter((i) => i.severity === "warning").length,
+            issues,
+        };
+    },
+});
+
+/**
+ * Migrate products from old variations format to new variationGroups format
+ * This converts products with legacy variations[] to variationGroups[]
+ */
+export const migrateProductsToVariationGroups = mutation({
+    args: {},
+    handler: async (ctx) => {
+        // Get all products that have old variations but not new variationGroups
+        const allProducts = await ctx.db.query("products").collect();
+        
+        const productsToMigrate = allProducts.filter(
+            (p) => p.variations && p.variations.length > 0 && !p.variationGroups
+        );
+
+        if (productsToMigrate.length === 0) {
+            return {
+                message: "No products need migration",
+                migrated: 0,
+                alreadyMigrated: allProducts.filter((p) => p.variationGroups).length,
+                simple: allProducts.filter((p) => !p.variations && !p.variationGroups).length,
+            };
+        }
+
+        // Migrate each product
+        let migrated = 0;
+        for (const product of productsToMigrate) {
+            // Convert old variations to new format
+            // Old format: variations: [{ name: "Hot", price: 2.0 }]
+            // New format: variationGroups: [{ name: "Temperature", required: true, options: [...] }]
+            
+            const variationGroups = [
+                {
+                    name: "Options", // Generic name for migrated variations
+                    required: true,
+                    options: product.variations!.map((v) => ({
+                        name: v.name,
+                        // Convert absolute price to price adjustment from base price
+                        priceAdjustment: v.price - product.basePrice,
+                    })),
+                },
+            ];
+
+            await ctx.db.patch(product._id, {
+                variationGroups,
+                // Keep old variations for reference (can be removed later)
+                // variations: undefined, // Uncomment to remove old data
+            });
+
+            migrated++;
+        }
+
+        return {
+            message: `Successfully migrated ${migrated} products`,
+            migrated,
+            total: allProducts.length,
+        };
+    },
+});
+
+/**
+ * Get migration status - check how many products use old vs new format
+ */
+export const getMigrationStatus = query({
+    args: {},
+    handler: async (ctx) => {
+        const allProducts = await ctx.db.query("products").collect();
+
+        const withVariationGroups = allProducts.filter((p) => p.variationGroups && p.variationGroups.length > 0);
+        const withLegacyVariations = allProducts.filter((p) => p.variations && p.variations.length > 0 && !p.variationGroups);
+        const simpleProducts = allProducts.filter((p) => !p.variations && !p.variationGroups);
+        const bothFormats = allProducts.filter((p) => p.variations && p.variationGroups);
+
+        return {
+            total: allProducts.length,
+            withVariationGroups: withVariationGroups.length,
+            withLegacyVariations: withLegacyVariations.length,
+            simpleProducts: simpleProducts.length,
+            bothFormats: bothFormats.length,
+            needsMigration: withLegacyVariations.length > 0,
         };
     },
 });
