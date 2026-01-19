@@ -46,6 +46,7 @@ interface ConvexProduct {
   imageUrl: string;
   basePrice: number;
   isPopular: boolean;
+  isActive?: boolean;
   variationGroups: {
     name: string;
     required: boolean;
@@ -121,7 +122,10 @@ export default function MenuPage() {
 
   const products = useMemo(() => {
     if (!convexProducts) return [];
-    return convexProducts.map(toLocalProduct);
+    // Filter out inactive (out of stock) products
+    return convexProducts
+      .filter(p => p.isActive !== false)
+      .map(toLocalProduct);
   }, [convexProducts]);
 
   // Refs for scroll management
@@ -323,10 +327,10 @@ export default function MenuPage() {
                       onSelect={() => setSelectedProduct(product)}
                       onQuickAdd={() => {
                         // Check if product has variation groups that require user selection
-                        const hasChoices = product.variationGroups?.some(group => 
+                        const hasChoices = product.variationGroups?.some(group =>
                           group.options.length > 1
                         );
-                        
+
                         if (!hasChoices) {
                           // No choices to make - add directly with default selections
                           const defaultSelections = product.variationGroups?.map(group => ({
@@ -334,7 +338,7 @@ export default function MenuPage() {
                             optionName: group.options[0].name,
                             priceAdjustment: group.options[0].priceAdjustment,
                           })) || [];
-                          
+
                           addItem(product, defaultSelections.length > 0 ? defaultSelections : undefined);
                         } else {
                           // Has variations to choose from - open modal
@@ -402,10 +406,10 @@ export default function MenuPage() {
                         onSelect={() => setSelectedProduct(product)}
                         onQuickAdd={() => {
                           // Check if product has variation groups that require user selection
-                          const hasChoices = product.variationGroups?.some(group => 
+                          const hasChoices = product.variationGroups?.some(group =>
                             group.options.length > 1
                           );
-                          
+
                           if (!hasChoices) {
                             // No choices to make - add directly with default selections
                             const defaultSelections = product.variationGroups?.map(group => ({
@@ -413,7 +417,7 @@ export default function MenuPage() {
                               optionName: group.options[0].name,
                               priceAdjustment: group.options[0].priceAdjustment,
                             })) || [];
-                            
+
                             addItem(product, defaultSelections.length > 0 ? defaultSelections : undefined);
                           } else {
                             // Has variations to choose from - open modal
@@ -471,7 +475,7 @@ function ProductCard({
   onSelect: () => void;
 }) {
   const hasValidImage = isValidUrl(product.imageUrl);
-  
+
   return (
     <div className="product-card cursor-pointer" onClick={onSelect}>
       <div className="relative">
@@ -536,7 +540,7 @@ function ProductListItem({
   onQuickAdd?: () => void;
 }) {
   const hasValidImage = isValidUrl(product.imageUrl);
-  
+
   return (
     <div
       className="flex gap-4 py-4 border-b border-[var(--border-light)] cursor-pointer hover:bg-black/[0.01] transition-colors"
